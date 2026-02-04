@@ -1,0 +1,6 @@
+build/bin
+node_modules
+frontend/dist
+sidekick.db
+sidekick.db-shm
+sidekick.db-wal
