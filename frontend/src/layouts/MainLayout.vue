@@ -1,7 +1,14 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, inject, computed, type Ref } from 'vue'
+import { utils } from '../../wailsjs/go/models'
 
 const leftDrawerOpen = ref(false)
+
+const selectedTarget = inject<Ref<utils.WindowInfo | null>>('selectedTarget', ref(null))
+
+const targetTitle = computed(() => selectedTarget.value?.title || '未关联应用')
+const targetProcess = computed(() => selectedTarget.value?.process || '')
+const targetHandle = computed(() => selectedTarget.value?.handle || '')
 
 const emit = defineEmits(['open-target-dialog'])
 
@@ -23,10 +30,27 @@ function toggleLeftDrawer() {
     </q-header>
 
     <q-drawer v-model="leftDrawerOpen" show-if-above bordered class="glass-drawer">
-      <q-list>
-        <q-item-label header> 工具 </q-item-label>
+      <q-list class="drawer-list">
+        <q-item-label header class="drawer-header">Sidekick</q-item-label>
 
-        <q-item clickable to="/">
+        <q-item class="drawer-card">
+          <q-item-section avatar>
+            <q-avatar color="primary" text-color="white" icon="link" />
+          </q-item-section>
+          <q-item-section class="drawer-card__content">
+            <div class="drawer-card__title">
+              <span>当前关联</span>
+              <q-btn dense flat color="primary" label="更换" @click="emit('open-target-dialog')" />
+            </div>
+            <q-item-label class="drawer-card__name" lines="1">{{ targetTitle }}</q-item-label>
+            <q-item-label caption lines="1" v-if="targetProcess">{{ targetProcess }}</q-item-label>
+            <q-item-label caption lines="1" v-if="targetHandle">句柄: {{ targetHandle }}</q-item-label>
+          </q-item-section>
+        </q-item>
+
+        <q-item-label header class="drawer-header"> 工具 </q-item-label>
+
+        <q-item clickable to="/" class="drawer-item">
           <q-item-section avatar>
             <q-icon name="assignment" />
           </q-item-section>
@@ -36,7 +60,7 @@ function toggleLeftDrawer() {
           </q-item-section>
         </q-item>
 
-        <q-item clickable @click="emit('open-target-dialog')">
+        <q-item clickable @click="emit('open-target-dialog')" class="drawer-item">
           <q-item-section avatar>
             <q-icon name="gps_fixed" />
           </q-item-section>
@@ -66,8 +90,54 @@ function toggleLeftDrawer() {
 }
 
 .glass-drawer {
-  background: rgba(255, 255, 255, 0.5) !important;
-  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.9) !important;
+  backdrop-filter: blur(16px);
+  border-right: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.drawer-list {
+  padding: 12px 10px 16px;
+}
+
+.drawer-header {
+  color: rgba(0, 0, 0, 0.55);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  margin: 4px 6px 8px;
+}
+
+.drawer-card {
+  margin: 6px 6px 18px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(25, 118, 210, 0.08), rgba(25, 118, 210, 0.02));
+  border: 1px solid rgba(25, 118, 210, 0.15);
+}
+
+.drawer-card__content {
+  gap: 2px;
+}
+
+.drawer-card__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.55);
+}
+
+.drawer-card__name {
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.drawer-item {
+  margin: 6px 6px;
+  border-radius: 10px;
+}
+
+.drawer-item:hover {
+  background: rgba(25, 118, 210, 0.08);
 }
 
 body.body--dark {
@@ -75,7 +145,21 @@ body.body--dark {
     background: rgba(0, 0, 0, 0.2);
   }
   .glass-drawer {
-    background: rgba(30, 30, 30, 0.7) !important;
+    background: rgba(20, 20, 20, 0.9) !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .drawer-header {
+    color: rgba(255, 255, 255, 0.65);
+  }
+  .drawer-card__title {
+    color: rgba(255, 255, 255, 0.6);
+  }
+  .drawer-card {
+    background: linear-gradient(135deg, rgba(66, 165, 245, 0.18), rgba(66, 165, 245, 0.05));
+    border: 1px solid rgba(66, 165, 245, 0.2);
+  }
+  .drawer-item:hover {
+    background: rgba(66, 165, 245, 0.14);
   }
 }
 </style>

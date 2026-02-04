@@ -7,7 +7,7 @@ const props = defineProps<{
   modelValue: boolean
 }>()
 
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue', 'target-selected'])
 
 const isOpen = computed({
   get: () => props.modelValue,
@@ -40,6 +40,7 @@ async function fetchWindows() {
 async function selectTarget(win: utils.WindowInfo) {
   try {
     await SetTarget(win.handle)
+    emit('target-selected', win)
     isOpen.value = false
   } catch (e) {
     console.error(e)
