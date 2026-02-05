@@ -237,7 +237,7 @@ onMounted(loadData)
     <!-- Directory Navigation Breadcrumb -->
     <div
       v-if="currentView === 'directory' && directoryPath && !searchText"
-      class="row items-center q-mb-sm bg-grey-2 q-pa-xs rounded-borders">
+      class="row items-center q-mb-sm bg-grey-2 text-grey-9 q-pa-xs rounded-borders">
       <q-btn flat dense icon="arrow_back" size="sm" @click="goUp" />
       <span class="text-caption q-ml-sm text-weight-bold">{{ directoryPath.name }}</span>
     </div>

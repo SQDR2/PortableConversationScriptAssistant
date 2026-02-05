@@ -29,7 +29,7 @@ const filteredWindows = computed(() => {
 async function fetchWindows() {
   loading.value = true
   try {
-    windows.value = await GetStartApps()
+    windows.value = (await GetStartApps()) || []
   } catch (e) {
     console.error(e)
   } finally {

@@ -60,7 +60,8 @@ func (s *WindowService) GetStartApps() []utils.WindowInfo {
 		return []utils.WindowInfo{}
 	}
 
-	var filtered []utils.WindowInfo
+	// Initialize with empty slice to ensure it returns [] instead of null in JSON
+	filtered := make([]utils.WindowInfo, 0)
 	for _, w := range windows {
 		// Filter out own window
 		if strings.EqualFold(w.Title, "sidekick") {
