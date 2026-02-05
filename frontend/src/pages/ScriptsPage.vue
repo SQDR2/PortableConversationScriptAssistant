@@ -232,7 +232,7 @@ onMounted(() => {
 
     <!-- 编辑对话框 -->
     <q-dialog v-model="showEditor" persistent>
-      <q-card style="min-width: 500px">
+      <q-card class="script-dialog-card" style="min-width: 300px">
         <q-card-section>
           <div class="text-h6">{{ editingScript ? '编辑话术' : '新建话术' }}</div>
         </q-card-section>
@@ -251,7 +251,7 @@ onMounted(() => {
 
     <!-- 导入对话框 -->
     <q-dialog v-model="showImportDialog">
-      <q-card style="min-width: 400px">
+      <q-card class="script-dialog-card" style="min-width: 300px">
         <q-card-section>
           <div class="text-h6">导入话术</div>
         </q-card-section>
@@ -273,3 +273,19 @@ onMounted(() => {
     <input type="file" ref="fileInput" style="display: none" @change="onFileSelected" accept=".txt" />
   </q-page>
 </template>
+
+<style lang="scss">
+.script-dialog-card {
+  color: rgba(0, 0, 0, 0.87);
+  .q-field__label {
+    color: rgba(0, 0, 0, 0.6);
+  }
+}
+
+body.body--dark .script-dialog-card {
+  color: white;
+  .q-field__label {
+    color: rgba(255, 255, 255, 0.7);
+  }
+}
+</style>
