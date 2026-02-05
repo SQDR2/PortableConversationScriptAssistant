@@ -21,7 +21,7 @@ func (s *ScriptService) Startup(ctx context.Context) {
 	s.ctx = ctx
 	// Auto migrate
 	if db.DB != nil {
-		err := db.DB.AutoMigrate(&models.Script{})
+		err := db.DB.AutoMigrate(&models.Category{}, &models.Script{})
 		if err != nil {
 			runtime.LogErrorf(s.ctx, "Failed to migrate database: %v", err)
 		}
@@ -30,38 +30,32 @@ func (s *ScriptService) Startup(ctx context.Context) {
 }
 
 func (s *ScriptService) setupFTS() {
-	// Create virtual table
-	db.DB.Exec("CREATE VIRTUAL TABLE IF NOT EXISTS scripts_fts USING fts5(content, tags, content='scripts', content_rowid='id');")
-
-	// Create triggers to keep FTS index in sync
-	db.DB.Exec(`CREATE TRIGGER IF NOT EXISTS scripts_ai AFTER INSERT ON scripts BEGIN
-        INSERT INTO scripts_fts(rowid, content, tags) VALUES (new.id, new.content, new.tags);
-    END;`)
-	db.DB.Exec(`CREATE TRIGGER IF NOT EXISTS scripts_ad AFTER DELETE ON scripts BEGIN
-        INSERT INTO scripts_fts(scripts_fts, rowid, content, tags) VALUES('delete', old.id, old.content, old.tags);
-    END;`)
-	db.DB.Exec(`CREATE TRIGGER IF NOT EXISTS scripts_au AFTER UPDATE ON scripts BEGIN
-        INSERT INTO scripts_fts(scripts_fts, rowid, content, tags) VALUES('delete', old.id, old.content, old.tags);
-        INSERT INTO scripts_fts(rowid, content, tags) VALUES (new.id, new.content, new.tags);
-    END;`)
+	// FTS5 might not be available on all systems, fallback to standard LIKE search.
+	// Clean up any existing FTS5 artifacts to prevent errors.
+	db.DB.Exec("DROP TRIGGER IF EXISTS scripts_ai")
+	db.DB.Exec("DROP TRIGGER IF EXISTS scripts_ad")
+	db.DB.Exec("DROP TRIGGER IF EXISTS scripts_au")
+	db.DB.Exec("DROP TABLE IF EXISTS scripts_fts")
 }
 
-func (s *ScriptService) CreateScript(content string, tags string) (*models.Script, error) {
+func (s *ScriptService) CreateScript(content string, tags string, categoryID *uint) (*models.Script, error) {
 	script := &models.Script{
-		Content: content,
-		Tags:    tags,
+		Content:    content,
+		Tags:       tags,
+		CategoryID: categoryID,
 	}
 	result := db.DB.Create(script)
 	return script, result.Error
 }
 
-func (s *ScriptService) UpdateScript(id uint, content string, tags string) (*models.Script, error) {
+func (s *ScriptService) UpdateScript(id uint, content string, tags string, categoryID *uint) (*models.Script, error) {
 	var script models.Script
 	if err := db.DB.First(&script, id).Error; err != nil {
 		return nil, err
 	}
 	script.Content = content
 	script.Tags = tags
+	script.CategoryID = categoryID
 	if err := db.DB.Save(&script).Error; err != nil {
 		return nil, err
 	}
@@ -81,25 +75,19 @@ func (s *ScriptService) ListScripts(page int, pageSize int) ([]models.Script, er
 
 func (s *ScriptService) SearchScripts(query string) ([]models.Script, error) {
 	var scripts []models.Script
-	// Use FTS5 match query
-	// Ideally we sanitize query or use separate args, strictly FTS syntax
-	// GORM raw query
-	// Note: We select from the MAIN table, joined with FTS, or just use rank
-	// Simplest: SELECT * FROM scripts WHERE id IN (SELECT rowid FROM scripts_fts WHERE scripts_fts MATCH ?)
+	searchQuery := "%" + query + "%"
+	// Standard LIKE search
+	result := db.DB.Where("content LIKE ? OR tags LIKE ?", searchQuery, searchQuery).
+		Order("created_at desc").
+		Find(&scripts)
 
-	err := db.DB.Raw("SELECT * FROM scripts WHERE id IN (SELECT rowid FROM scripts_fts WHERE scripts_fts MATCH ?) ORDER BY rank", query).Scan(&scripts).Error
-	if err != nil {
-		runtime.LogErrorf(s.ctx, "Search error: %v", err)
-		return nil, err
-	}
-	return scripts, nil
+	return scripts, result.Error
 }
 
-func (s *ScriptService) ImportScripts(content string, delimiter string) (int, error) {
-	parts := strings.Split(content, delimiter)
+func (s *ScriptService) ImportScripts(scripts []string) (int, error) {
 	count := 0
 	tx := db.DB.Begin()
-	for _, part := range parts {
+	for _, part := range scripts {
 		trimmed := strings.TrimSpace(part)
 		if trimmed == "" {
 			continue

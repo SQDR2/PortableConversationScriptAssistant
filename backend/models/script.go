@@ -7,12 +7,13 @@ import (
 )
 
 type Script struct {
-	ID        uint           `gorm:"primaryKey" json:"id"`
-	Content   string         `gorm:"type:text;not null" json:"content"`
-	Tags      string         `gorm:"index" json:"tags"` // Comma separated tags
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+	ID         uint           `gorm:"primaryKey" json:"id"`
+	Content    string         `gorm:"type:text;not null" json:"content"`
+	Tags       string         `gorm:"index" json:"tags"`        // Comma separated tags
+	CategoryID *uint          `gorm:"index" json:"category_id"` // Pointer to allow NULL (uncategorized)
+	CreatedAt  time.Time      `json:"created_at"`
+	UpdatedAt  time.Time      `json:"updated_at"`
+	DeletedAt  gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 // ScriptFTS represents the virtual table for Full Text Search

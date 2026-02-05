@@ -28,6 +28,7 @@ func main() {
 	app := NewApp()
 	windowService := services.NewWindowService()
 	scriptService := services.NewScriptService()
+	categoryService := services.NewCategoryService()
 
 	// Create application with options
 	err := wails.Run(&options.App{
@@ -39,16 +40,17 @@ func main() {
 		},
 		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
 		OnStartup: func(ctx context.Context) {
-			app.startup(ctx)
-			windowService.Startup(ctx)
-			scriptService.Startup(ctx)
-
 			// Initialize DB
 			// TODO: Get proper app data dir
 			cwd, _ := os.Getwd()
 			if err := db.InitDB(cwd); err != nil {
 				runtime.LogErrorf(ctx, "Failed to init DB: %v", err)
 			}
+
+			app.startup(ctx)
+			windowService.Startup(ctx)
+			scriptService.Startup(ctx)
+			categoryService.Startup(ctx)
 		},
 		OnShutdown: func(ctx context.Context) {
 			windowService.Shutdown(ctx)
@@ -57,6 +59,7 @@ func main() {
 			app,
 			windowService,
 			scriptService,
+			categoryService,
 		},
 	})
 

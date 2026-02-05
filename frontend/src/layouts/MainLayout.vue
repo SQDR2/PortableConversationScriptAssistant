@@ -48,15 +48,12 @@ function toggleLeftDrawer() {
           </q-item-section>
         </q-item>
 
-        <q-item-label header class="drawer-header"> 工具 </q-item-label>
-
         <q-item clickable to="/" class="drawer-item">
           <q-item-section avatar>
             <q-icon name="assignment" />
           </q-item-section>
           <q-item-section>
             <q-item-label>话术管理</q-item-label>
-            <q-item-label caption>管理您的常用话术</q-item-label>
           </q-item-section>
         </q-item>
 

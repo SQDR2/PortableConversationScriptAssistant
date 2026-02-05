@@ -3,11 +3,11 @@
 import {models} from '../models';
 import {context} from '../models';
 
-export function CreateScript(arg1:string,arg2:string):Promise<models.Script>;
+export function CreateScript(arg1:string,arg2:string,arg3:any):Promise<models.Script>;
 
 export function DeleteScript(arg1:number):Promise<void>;
 
-export function ImportScripts(arg1:string,arg2:string):Promise<number>;
+export function ImportScripts(arg1:Array<string>):Promise<number>;
 
 export function ListScripts(arg1:number,arg2:number):Promise<Array<models.Script>>;
 
@@ -15,4 +15,4 @@ export function SearchScripts(arg1:string):Promise<Array<models.Script>>;
 
 export function Startup(arg1:context.Context):Promise<void>;
 
-export function UpdateScript(arg1:number,arg2:string,arg3:string):Promise<models.Script>;
+export function UpdateScript(arg1:number,arg2:string,arg3:string,arg4:any):Promise<models.Script>;
