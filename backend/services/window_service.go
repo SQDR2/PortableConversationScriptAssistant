@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"sidekick/backend/utils"
+	"strings"
 	"sync"
 	"time"
 
@@ -58,7 +59,17 @@ func (s *WindowService) GetStartApps() []utils.WindowInfo {
 		runtime.LogErrorf(s.ctx, "Failed to get windows: %v", err)
 		return []utils.WindowInfo{}
 	}
-	return windows
+
+	var filtered []utils.WindowInfo
+	for _, w := range windows {
+		// Filter out own window
+		if strings.EqualFold(w.Title, "sidekick") {
+			continue
+		}
+		filtered = append(filtered, w)
+	}
+
+	return filtered
 }
 
 func (s *WindowService) SetTarget(handle string) {
