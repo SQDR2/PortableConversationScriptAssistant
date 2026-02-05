@@ -56,7 +56,7 @@ onMounted(() => {
 
 <template>
   <q-dialog v-model="isOpen" @show="fetchWindows">
-    <q-card style="min-width: 350px">
+    <q-card class="target-dialog-card" style="min-width: 350px">
       <q-card-section>
         <div class="text-h6">选择目标应用程序</div>
       </q-card-section>
@@ -97,3 +97,13 @@ onMounted(() => {
     </q-card>
   </q-dialog>
 </template>
+
+<style lang="scss">
+.target-dialog-card {
+  color: rgba(0, 0, 0, 0.87);
+}
+
+body.body--dark .target-dialog-card {
+  color: white;
+}
+</style>

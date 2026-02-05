@@ -93,6 +93,7 @@ function toggleLeftDrawer() {
   background: rgba(255, 255, 255, 0.9) !important;
   backdrop-filter: blur(16px);
   border-right: 1px solid rgba(0, 0, 0, 0.06);
+  color: black;
 }
 
 .drawer-list {
@@ -147,6 +148,7 @@ body.body--dark {
   .glass-drawer {
     background: rgba(20, 20, 20, 0.9) !important;
     border-right: 1px solid rgba(255, 255, 255, 0.08);
+    color: white;
   }
   .drawer-header {
     color: rgba(255, 255, 255, 0.65);
