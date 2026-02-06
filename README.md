@@ -9,6 +9,7 @@ Sidekick 是一款基于 Wails 构建的桌面辅助工具，旨在为日常办�
 - **智能化检索**：内置 SQLite FTS5 (全文搜索)，支持快速搜索成千上万条话术。
 - **话术管理**：支持话术的增删改查、标签分类，并支持通过文本文件批量导入。
 - **磨砂玻璃特效**：采用现代化的 Glassmorphism 设计，界面美观且不遮挡背景。
+- **实时翻译**：集成腾讯云 TMT 翻译引擎，支持多语言实时对照翻译。
 
 ## 技术栈
 
@@ -18,6 +19,7 @@ Sidekick 是一款基于 Wails 构建的桌面辅助工具，旨在为日常办�
 - **GORM**：强大的 Go ORM 库，管理 SQLite 数据库。
 - **SQLite FTS5**：实现高性能的全文本检索。
 - **XGB / EWMH (Linux)** & **Win32 API (Windows)**：底层窗口同步与控制。
+- **腾讯云 SDK**：集成 TMT 服务，实现高精度的文本翻译。
 
 ### 前端 (TypeScript)
 
@@ -52,6 +54,30 @@ Sidekick 是一款基于 Wails 构建的桌面辅助工具，旨在为日常办�
 ```bash
 wails build
 ```
+
+## 配置说明
+
+### 翻译服务配置
+
+Sidekick 的翻译功能依赖腾讯云文本翻译 (TMT) 服务。
+
+1. **自动配置**：
+   - 首次启动应用时，若检测到未配置密钥，会自动弹出配置窗口。
+   - 也可以通过侧边栏中的 **“翻译配置”** 选项随时进行修改。
+
+2. **手动配置**：
+   - 在应用根目录下的 `config.json` 文件中，填写以下信息：
+     ```json
+     {
+       "tencent_cloud": {
+         "secret_id": "你的 SecretId",
+         "secret_key": "你的 SecretKey",
+         "region": "ap-guangzhou",
+         "project_id": 0
+       }
+     }
+     ```
+   - 获取密钥：前往 [腾讯云访问管理控制台](https://console.cloud.tencent.com/cam/capi) 获取 SecretId 和 SecretKey。
 
 ## 贡献
 
