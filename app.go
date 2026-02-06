@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
 )
 
 // App struct
@@ -24,4 +26,13 @@ func (a *App) startup(ctx context.Context) {
 // Greet returns a greeting for the given name
 func (a *App) Greet(name string) string {
 	return fmt.Sprintf("Hello %s, It's show time!", name)
+}
+
+// GetVersion returns the application version from the VERSION file
+func (a *App) GetVersion() string {
+	version, err := os.ReadFile("VERSION")
+	if err != nil {
+		return "v1.0.0" // 默认回退版本
+	}
+	return strings.TrimSpace(string(version))
 }

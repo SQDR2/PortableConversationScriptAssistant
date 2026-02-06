@@ -4,6 +4,7 @@ import { utils } from '../../wailsjs/go/models'
 import TranslationBar from '../components/TranslationBar.vue'
 import ConfigDialog from '../components/ConfigDialog.vue'
 import { GetConfigStatus } from '../../wailsjs/go/services/TranslationService'
+import { GetVersion } from '../../wailsjs/go/main/App'
 
 const leftDrawerOpen = ref(false)
 
@@ -17,6 +18,7 @@ const emit = defineEmits(['open-target-dialog'])
 const showTranslation = ref(true)
 const configDialogOpen = ref(false)
 const isConfigForced = ref(false)
+const appVersion = ref('v1.0.0')
 
 onMounted(async () => {
   try {
@@ -27,6 +29,12 @@ onMounted(async () => {
     }
   } catch (err) {
     console.error('Failed to check config status:', err)
+  }
+
+  try {
+    appVersion.value = await GetVersion()
+  } catch (err) {
+    console.error('Failed to get version:', err)
   }
 })
 
@@ -61,7 +69,7 @@ function toggleLeftDrawer() {
           :color="showTranslation ? 'primary' : 'grey'">
           <q-tooltip>切换翻译栏</q-tooltip>
         </q-btn>
-        <div class="q-ml-sm">v0.0.1</div>
+        <div class="q-ml-sm">{{ appVersion }}</div>
       </q-toolbar>
     </q-header>
 
