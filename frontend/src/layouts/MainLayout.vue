@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { ref, inject, computed, type Ref } from 'vue'
+import { ref, inject, computed, type Ref, onMounted } from 'vue'
 import { utils } from '../../wailsjs/go/models'
 import TranslationBar from '../components/TranslationBar.vue'
+import ConfigDialog from '../components/ConfigDialog.vue'
+import { GetConfigStatus } from '../../wailsjs/go/services/TranslationService'
 
 const leftDrawerOpen = ref(false)
 
@@ -13,6 +15,25 @@ const targetHandle = computed(() => selectedTarget.value?.handle || '')
 
 const emit = defineEmits(['open-target-dialog'])
 const showTranslation = ref(true)
+const configDialogOpen = ref(false)
+const isConfigForced = ref(false)
+
+onMounted(async () => {
+  try {
+    const isConfigured = await GetConfigStatus()
+    if (!isConfigured) {
+      isConfigForced.value = true
+      configDialogOpen.value = true
+    }
+  } catch (err) {
+    console.error('Failed to check config status:', err)
+  }
+})
+
+function openConfigDialog() {
+  isConfigForced.value = false
+  configDialogOpen.value = true
+}
 
 function toggleTranslation() {
   showTranslation.value = !showTranslation.value
@@ -72,6 +93,16 @@ function toggleLeftDrawer() {
           </q-item-section>
         </q-item>
 
+        <q-item clickable @click="openConfigDialog" class="drawer-item">
+          <q-item-section avatar>
+            <q-icon name="settings" />
+          </q-item-section>
+          <q-item-section>
+            <q-item-label>翻译配置</q-item-label>
+            <q-item-label caption>设置腾讯云 API 密钥</q-item-label>
+          </q-item-section>
+        </q-item>
+
         <q-item clickable @click="emit('open-target-dialog')" class="drawer-item">
           <q-item-section avatar>
             <q-icon name="gps_fixed" />
@@ -91,6 +122,8 @@ function toggleLeftDrawer() {
     <q-footer v-if="showTranslation" elevated class="glass-footer">
       <TranslationBar />
     </q-footer>
+
+    <ConfigDialog v-model="configDialogOpen" :forced="isConfigForced" />
   </q-layout>
 </template>
 

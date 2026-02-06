@@ -57,6 +57,61 @@ func (s *TranslationService) Startup(ctx context.Context) {
 	runtime.LogInfof(s.ctx, "TranslationService initialized using region: %s", s.config.TencentCloud.Region)
 }
 
+func (s *TranslationService) GetConfigStatus() bool {
+	if s.config == nil {
+		return false
+	}
+	if s.config.TencentCloud.SecretId == "" || s.config.TencentCloud.SecretId == "REPLACE_WITH_YOUR_SECRET_ID" {
+		return false
+	}
+	if s.config.TencentCloud.SecretKey == "" || s.config.TencentCloud.SecretKey == "REPLACE_WITH_YOUR_SECRET_KEY" {
+		return false
+	}
+	return true
+}
+
+func (s *TranslationService) UpdateCredentials(secretId string, secretKey string) error {
+	if s.config == nil {
+		// Try to reload or init default if nil, but Startup should have handled it.
+		// If Startup failed completely (file read error), maybe we need to create a new struct.
+		// But assuming config.json exists (per requirement) but is empty.
+		// If s.config is nil, it means LoadConfig failed entirely.
+		// Let's create a default AppConfig if needed, but preserve existing one if possible.
+		s.config = &utils.AppConfig{
+			TencentCloud: utils.TencentCloudConfig{
+				Region: "ap-guangzhou", // Default fallback
+			},
+		}
+	}
+
+	s.config.TencentCloud.SecretId = secretId
+	s.config.TencentCloud.SecretKey = secretKey
+
+	// Save to file
+	configPath := "config.json"
+	err := utils.SaveConfig(configPath, s.config)
+	if err != nil {
+		runtime.LogErrorf(s.ctx, "Failed to save config: %v", err)
+		return fmt.Errorf("failed to save config: %w", err)
+	}
+
+	// Re-initialize client
+	credential := common.NewCredential(
+		s.config.TencentCloud.SecretId,
+		s.config.TencentCloud.SecretKey,
+	)
+	cpf := profile.NewClientProfile()
+	cpf.HttpProfile.Endpoint = "tmt.tencentcloudapi.com"
+	client, err := tmt.NewClient(credential, s.config.TencentCloud.Region, cpf)
+	if err != nil {
+		runtime.LogErrorf(s.ctx, "Failed to create TMT client: %v", err)
+		return fmt.Errorf("failed to create TMT client: %w", err)
+	}
+	s.client = client
+	runtime.LogInfof(s.ctx, "TranslationService updated and re-initialized.")
+	return nil
+}
+
 func (s *TranslationService) Translate(sourceText string, sourceLang string, targetLang string) (string, error) {
 	if s.client == nil {
 		return "", fmt.Errorf("Translation service not configured. Please check config.json")
