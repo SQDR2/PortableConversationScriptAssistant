@@ -10,16 +10,32 @@ The application SHALL display a translation bar fixed at the bottom of the main 
 
 #### Scenario: Layout rendering
 
-- **WHEN** user opens any page in the application
-- **THEN** the translation bar is visible at the bottom
+- **WHEN** user opens application
+- **THEN** the translation bar is visible by default
+
+### Requirement: Toggle Visibility
+
+The translation bar SHALL appear at the bottom when the user clicks the translation toggle button in the header. When visible, it MUST push the main content area up (compress scroll area) rather than overlaying it.
+
+#### Scenario: Toggle On
+
+- **WHEN** user clicks translation button
+- **THEN** translation bar appears
+- **AND** main script list height decreases to fit
+
+#### Scenario: Toggle Off
+
+- **WHEN** user clicks translation button again
+- **THEN** translation bar disappears
+- **AND** main script list height expands
 
 ### Requirement: Execute Translation
 
-The interface SHALL automatically trigger translation when the user stops typing in the input area for a specified duration (e.g., 500ms debounce), OR when the user explicitly actions it (e.g., Enter).
+The interface SHALL trigger translation ONLY when the user explicitly actions it (e.g., pressing Enter). Automatic translation (debounce) SHALL be disabled to conserve API usage.
 
-#### Scenario: Debounced Translation
+#### Scenario: Manual Translation
 
-- **WHEN** user types "Hello" and pauses
+- **WHEN** user types "Hello" and presses Enter
 - **THEN** application calls backend translation service
 - **AND** updates the output area with the result
 
