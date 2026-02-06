@@ -78,6 +78,7 @@ export namespace models {
 	    content: string;
 	    tags: string;
 	    category_id?: number;
+	    images: string;
 	    // Go type: time
 	    created_at: any;
 	    // Go type: time
@@ -93,6 +94,7 @@ export namespace models {
 	        this.content = source["content"];
 	        this.tags = source["tags"];
 	        this.category_id = source["category_id"];
+	        this.images = source["images"];
 	        this.created_at = this.convertValues(source["created_at"], null);
 	        this.updated_at = this.convertValues(source["updated_at"], null);
 	    }

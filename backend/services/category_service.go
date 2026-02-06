@@ -34,10 +34,13 @@ func (s *CategoryService) CreateCategory(name string) (*models.Category, error) 
 }
 
 func (s *CategoryService) ListCategories() ([]models.Category, error) {
+	runtime.LogInfo(s.ctx, "ListCategories called")
 	var categories []models.Category
-	// Preload scripts count if needed, but for now just list categories
-	// We might want to order by creation time or name
 	result := db.DB.Order("created_at desc").Find(&categories)
+	if result.Error != nil {
+		runtime.LogErrorf(s.ctx, "ListCategories DB error: %v", result.Error)
+	}
+	runtime.LogInfof(s.ctx, "ListCategories found %d records", len(categories))
 	return categories, result.Error
 }
 

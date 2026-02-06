@@ -2,10 +2,16 @@ package services
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
 	"sidekick/backend/db"
 	"sidekick/backend/models"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -19,12 +25,14 @@ func NewScriptService() *ScriptService {
 
 func (s *ScriptService) Startup(ctx context.Context) {
 	s.ctx = ctx
+	runtime.LogInfo(s.ctx, "ScriptService starting up...")
 	// Auto migrate
 	if db.DB != nil {
 		err := db.DB.AutoMigrate(&models.Category{}, &models.Script{})
 		if err != nil {
 			runtime.LogErrorf(s.ctx, "Failed to migrate database: %v", err)
 		}
+		runtime.LogInfo(s.ctx, "Database migration complete")
 		s.setupFTS()
 	}
 }
@@ -38,17 +46,18 @@ func (s *ScriptService) setupFTS() {
 	db.DB.Exec("DROP TABLE IF EXISTS scripts_fts")
 }
 
-func (s *ScriptService) CreateScript(content string, tags string, categoryID *uint) (*models.Script, error) {
+func (s *ScriptService) CreateScript(content string, tags string, categoryID *uint, images string) (*models.Script, error) {
 	script := &models.Script{
 		Content:    content,
 		Tags:       tags,
 		CategoryID: categoryID,
+		Images:     images,
 	}
 	result := db.DB.Create(script)
 	return script, result.Error
 }
 
-func (s *ScriptService) UpdateScript(id uint, content string, tags string, categoryID *uint) (*models.Script, error) {
+func (s *ScriptService) UpdateScript(id uint, content string, tags string, categoryID *uint, images string) (*models.Script, error) {
 	var script models.Script
 	if err := db.DB.First(&script, id).Error; err != nil {
 		return nil, err
@@ -56,6 +65,7 @@ func (s *ScriptService) UpdateScript(id uint, content string, tags string, categ
 	script.Content = content
 	script.Tags = tags
 	script.CategoryID = categoryID
+	script.Images = images
 	if err := db.DB.Save(&script).Error; err != nil {
 		return nil, err
 	}
@@ -63,13 +73,31 @@ func (s *ScriptService) UpdateScript(id uint, content string, tags string, categ
 }
 
 func (s *ScriptService) DeleteScript(id uint) error {
+	var script models.Script
+	if err := db.DB.First(&script, id).Error; err == nil {
+		if script.Images != "" {
+			var imagePaths []string
+			if err := json.Unmarshal([]byte(script.Images), &imagePaths); err == nil {
+				for _, p := range imagePaths {
+					cwd, _ := os.Getwd()
+					fullPath := filepath.Join(cwd, p)
+					os.Remove(fullPath)
+				}
+			}
+		}
+	}
 	return db.DB.Delete(&models.Script{}, id).Error
 }
 
 func (s *ScriptService) ListScripts(page int, pageSize int) ([]models.Script, error) {
+	runtime.LogInfof(s.ctx, "ListScripts called: page=%d, pageSize=%d", page, pageSize)
 	var scripts []models.Script
 	offset := (page - 1) * pageSize
 	result := db.DB.Order("created_at desc").Offset(offset).Limit(pageSize).Find(&scripts)
+	if result.Error != nil {
+		runtime.LogErrorf(s.ctx, "ListScripts DB error: %v", result.Error)
+	}
+	runtime.LogInfof(s.ctx, "ListScripts found %d records", len(scripts))
 	return scripts, result.Error
 }
 
@@ -100,4 +128,35 @@ func (s *ScriptService) ImportScripts(scripts []string) (int, error) {
 		count++
 	}
 	return count, tx.Commit().Error
+}
+
+func (s *ScriptService) SaveScriptImage(base64Data string, ext string) (string, error) {
+	// Decode base64
+	data, err := base64.StdEncoding.DecodeString(base64Data)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode base64: %v", err)
+	}
+
+	// Ensure images directory exists
+	cwd, _ := os.Getwd()
+	imagesDir := filepath.Join(cwd, "images")
+	if err := os.MkdirAll(imagesDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create images directory: %v", err)
+	}
+
+	// Generate UUID V7 filename
+	id, err := uuid.NewV7()
+	if err != nil {
+		return "", fmt.Errorf("failed to generate uuid: %v", err)
+	}
+	fileName := id.String() + ext
+	filePath := filepath.Join(imagesDir, fileName)
+
+	// Save file
+	if err := os.WriteFile(filePath, data, 0644); err != nil {
+		return "", fmt.Errorf("failed to write file: %v", err)
+	}
+
+	// Return RELATIVE path for database
+	return filepath.Join("images", fileName), nil
 }

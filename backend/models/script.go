@@ -11,6 +11,7 @@ type Script struct {
 	Content    string         `gorm:"type:text;not null" json:"content"`
 	Tags       string         `gorm:"index" json:"tags"`        // Comma separated tags
 	CategoryID *uint          `gorm:"index" json:"category_id"` // Pointer to allow NULL (uncategorized)
+	Images     string         `gorm:"type:text" json:"images"`  // JSON array of image paths
 	CreatedAt  time.Time      `json:"created_at"`
 	UpdatedAt  time.Time      `json:"updated_at"`
 	DeletedAt  gorm.DeletedAt `gorm:"index" json:"-"`

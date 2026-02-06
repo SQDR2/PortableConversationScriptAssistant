@@ -1,7 +1,7 @@
 {
   "tencent_cloud": {
-    "secret_id": "",
-    "secret_key": "",
+    "secret_id": "a",
+    "secret_key": "b",
     "region": "ap-guangzhou",
     "project_id": 0
   }

@@ -9,5 +9,6 @@
   "author": {
     "name": "zhenglw",
     "email": "3220064721@qq.com"
-  }
+  },
+  "rebuild:ignore": ["*.db", "images/*"]
 }

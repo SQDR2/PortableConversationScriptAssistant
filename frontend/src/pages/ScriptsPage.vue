@@ -37,58 +37,60 @@ const searchText = ref('')
 
 // Computed Scripts
 const displayedScripts = computed(() => {
-  let list = scripts.value
+  try {
+    const raw = scripts.value
+    console.log('[DISPLAY_DEBUG] Start computing. scripts.value is:', Array.isArray(raw) ? raw.length : 'NOT_ARRAY')
 
-  // 1. Search Filter (Global)
-  if (searchText.value) {
-    const lower = searchText.value.toLowerCase()
-    list = list.filter(s => s.content.toLowerCase().includes(lower) || s.tags?.toLowerCase().includes(lower))
-  }
+    if (!raw || !Array.isArray(raw)) return []
 
-  // 2. View Filter
-  if (currentView.value === 'directory' && !searchText.value) {
-    // If searching, we show all matches regardless of directory?
-    // Requirement decision: "Search should be global".
-    // So if searchText is present, we ignore directory filter? Or we highlight?
-    // Let's make search override view filters for simplicity.
+    let list = [...raw]
 
-    if (directoryPath.value) {
-      // Inside a category
-      list = list.filter(s => s.category_id === directoryPath.value?.id)
-    } else {
-      // Root of Directory view: Don't show any scripts? Or show 'Uncategorized'?
-      // Design: "First layer: Show all 'directory cards' + 'Uncategorized scripts'?"
-      // Let's show only Uncategorized scripts at root, or nothing?
-      // Usually file managers show folders + files.
-      // We will handle this in template.
-      list = list.filter(s => !s.category_id) // Root shows uncategorized
+    // 1. Search Filter (Global)
+    const query = searchText.value?.trim().toLowerCase()
+    if (query) {
+      list = list.filter(s => {
+        const content = (s.content || '').toLowerCase()
+        const tags = (s.tags || '').toLowerCase()
+        return content.includes(query) || tags.includes(query)
+      })
+    } else if (currentView.value === 'directory') {
+      // 2. View Filter (Only if not searching)
+      if (directoryPath.value) {
+        const searchDirId = directoryPath.value.id
+        list = list.filter(s => s.category_id === searchDirId)
+      } else {
+        list = list.filter(s => !s.category_id)
+      }
     }
-  }
 
-  // 3. Sort: Always Created Desc for now
-  // (Already sorted by backend mostly, but client filtering might mess up if we append?)
-  // Re-sort to be safe
-  return list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    console.log('[DISPLAY_DEBUG] End computing. Result count:', list.length)
+    return list
+  } catch (err) {
+    console.error('[CRITICAL_COMPUTED_ERROR]', err)
+    return []
+  }
 })
 
 // Loading Data
-async function loadData() {
-  loading.value = true
+async function loadData(showLoading = true) {
+  console.log('loadData start, showLoading:', showLoading)
+  if (showLoading) loading.value = true
   try {
-    // Load all data parallel
-    // @ts-ignore
-    const p1 = ScriptService.ListScripts(1, 10000) // Load all for client-side filtering
-    // @ts-ignore
+    const p1 = ScriptService.ListScripts(1, 1000)
     const p2 = CategoryService.ListCategories()
 
     const [loadedScripts, loadedCats] = await Promise.all([p1, p2])
-    scripts.value = loadedScripts
-    categories.value = loadedCats
+    console.log('loadData fetched. scripts:', loadedScripts?.length, 'cats:', loadedCats?.length)
+
+    scripts.value = loadedScripts || []
+    categories.value = loadedCats || []
+    console.log('loadData state updated')
   } catch (e) {
-    console.error(e)
-    $q.notify({ type: 'negative', message: '数据加载失败' })
+    console.error('loadData error:', e)
+    $q.notify({ type: 'negative', message: '数据加载失败', position: 'top' })
   } finally {
-    loading.value = false
+    if (showLoading) loading.value = false
+    console.log('loadData finished, loading state:', loading.value)
   }
 }
 
@@ -98,6 +100,8 @@ const editingScript = ref<models.Script | null>(null)
 const editorContent = ref('')
 const editorTags = ref('')
 const editorCategoryId = ref<number | null>(null)
+const editorImages = ref<string[]>([])
+const uploadDummy = ref(null)
 
 function openEditor(script?: models.Script) {
   if (script) {
@@ -105,6 +109,7 @@ function openEditor(script?: models.Script) {
     editorContent.value = script.content
     editorTags.value = script.tags
     editorCategoryId.value = script.category_id || null
+    editorImages.value = script.images ? JSON.parse(script.images) : []
   } else {
     editingScript.value = null
     editorContent.value = ''
@@ -115,8 +120,31 @@ function openEditor(script?: models.Script) {
     } else {
       editorCategoryId.value = null
     }
+    editorImages.value = []
   }
   showEditor.value = true
+}
+
+async function handleFileUpload(file: File) {
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = async () => {
+    const base64 = (reader.result as string).split(',')[1]
+    const ext = file.name.substring(file.name.lastIndexOf('.'))
+    try {
+      // @ts-ignore
+      const path = await ScriptService.SaveScriptImage(base64, ext)
+      editorImages.value.push(path)
+    } catch (e) {
+      console.error(e)
+      $q.notify({ type: 'negative', message: '图片上传失败' })
+    }
+  }
+  reader.readAsDataURL(file)
+}
+
+function removeImage(index: number) {
+  editorImages.value.splice(index, 1)
 }
 
 async function saveScript() {
@@ -128,15 +156,21 @@ async function saveScript() {
         editorContent.value,
         editorTags.value,
         editorCategoryId.value,
+        JSON.stringify(editorImages.value),
       )
       $q.notify({ type: 'positive', message: '话术已更新' })
     } else {
       // @ts-ignore
-      await ScriptService.CreateScript(editorContent.value, editorTags.value, editorCategoryId.value)
+      await ScriptService.CreateScript(
+        editorContent.value,
+        editorTags.value,
+        editorCategoryId.value,
+        JSON.stringify(editorImages.value),
+      )
       $q.notify({ type: 'positive', message: '话术已创建' })
     }
     showEditor.value = false
-    loadData()
+    loadData(false)
   } catch (e) {
     $q.notify({ type: 'negative', message: '保存失败' })
   }
@@ -147,7 +181,7 @@ async function deleteScript(script: models.Script) {
     // @ts-ignore
     await ScriptService.DeleteScript(script.id)
     $q.notify({ type: 'positive', message: '话术已删除' })
-    loadData()
+    loadData(false)
   } catch (e) {
     $q.notify({ type: 'negative', message: '删除失败' })
   }
@@ -200,7 +234,7 @@ function tweakPageHeight(offset: number) {
 </script>
 
 <template>
-  <q-page class="q-pa-md column no-wrap" :style-fn="tweakPageHeight">
+  <q-page class="q-pa-md column no-wrap" style="height: 100%; min-height: unset; display: flex">
     <!-- Header: Search & Actions -->
     <div class="row q-mb-sm items-center q-gutter-sm">
       <q-input dense outlined v-model="searchText" placeholder="搜索..." class="col" debounce="300">
@@ -247,13 +281,8 @@ function tweakPageHeight(offset: number) {
     </div>
 
     <!-- Main Content Area -->
-    <q-scroll-area class="col">
-      <!-- Loading -->
-      <div v-if="loading" class="row justify-center q-pa-md">
-        <q-spinner color="primary" size="2em" />
-      </div>
-
-      <template v-else>
+    <div class="col relative-position scroll" style="flex: 1; overflow-y: auto; overflow-x: hidden">
+      <div>
         <!-- Directory View: Category List (Only at Root) -->
         <div v-if="currentView === 'directory' && !directoryPath && !searchText">
           <CategoryList
@@ -265,7 +294,7 @@ function tweakPageHeight(offset: number) {
                 if (c) enterCategory(c)
               }
             "
-            @refresh="loadData" />
+            @refresh="loadData(false)" />
           <q-separator class="q-my-sm" />
           <div class="text-caption text-grey-6 q-mb-xs q-px-sm">未分类话术</div>
         </div>
@@ -279,12 +308,17 @@ function tweakPageHeight(offset: number) {
             @edit="openEditor"
             @delete="deleteScript" />
 
-          <div v-if="displayedScripts.length === 0" class="text-center text-grey q-pa-lg">
+          <div v-if="displayedScripts.length === 0 && !loading" class="text-center text-grey q-pa-lg">
             {{ currentView === 'directory' && !directoryPath ? '无未分类话术' : '暂无话术' }}
           </div>
         </div>
-      </template>
-    </q-scroll-area>
+      </div>
+
+      <q-inner-loading :showing="loading" style="z-index: 9999">
+        <q-spinner-tail color="primary" size="3em" />
+        <div class="q-mt-md">加载中...</div>
+      </q-inner-loading>
+    </div>
 
     <!-- Editor Dialog -->
     <q-dialog v-model="showEditor" persistent>
@@ -313,6 +347,45 @@ function tweakPageHeight(offset: number) {
             autofocus
             style="max-height: 200px; overflow-y: auto" />
           <q-input v-model="editorTags" label="标签 (逗号分隔)" class="q-mt-md" outlined dense />
+
+          <!-- Image Selection -->
+          <div class="q-mt-lg">
+            <div class="row items-center q-mb-sm">
+              <span class="text-subtitle2 text-grey-8">图片附件</span>
+              <q-space />
+              <span class="text-caption text-grey-6">{{ editorImages.length }} / 10</span>
+            </div>
+            <div class="row q-gutter-md">
+              <div v-for="(img, index) in editorImages" :key="index" class="relative-position">
+                <q-img :src="img" style="width: 70px; height: 70px" class="rounded-borders shadow-1 border-grey" />
+                <q-btn
+                  round
+                  dense
+                  color="negative"
+                  icon="close"
+                  size="xs"
+                  class="absolute-top-right"
+                  style="top: -8px; right: -8px; z-index: 10"
+                  @click="removeImage(index)" />
+              </div>
+              <q-file
+                v-if="editorImages.length < 10"
+                v-model="uploadDummy"
+                borderless
+                dense
+                accept="image/*"
+                display-value=""
+                @update:model-value="handleFileUpload"
+                style="width: 70px; height: 70px"
+                class="bg-grey-2 rounded-borders overflow-hidden upload-box">
+                <template v-slot:default>
+                  <div class="full-width full-height flex flex-center">
+                    <q-icon name="add_a_photo" color="grey-6" size="sm" />
+                  </div>
+                </template>
+              </q-file>
+            </div>
+          </div>
         </q-card-section>
 
         <q-card-actions align="right">
@@ -361,5 +434,25 @@ body.body--dark .script-dialog-card {
   .q-field__label {
     color: rgba(255, 255, 255, 0.7);
   }
+}
+
+.upload-box {
+  border: 2px dashed #ddd;
+  cursor: pointer;
+  &:hover {
+    border-color: var(--q-primary);
+    background: #f5f5f5;
+  }
+}
+
+body.body--dark .upload-box {
+  border-color: #444;
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+}
+
+.border-grey {
+  border: 1px solid rgba(0, 0, 0, 0.1);
 }
 </style>
