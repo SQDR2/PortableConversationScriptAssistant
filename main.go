@@ -29,6 +29,7 @@ func main() {
 	windowService := services.NewWindowService()
 	scriptService := services.NewScriptService()
 	categoryService := services.NewCategoryService()
+	translationService := services.NewTranslationService()
 
 	// Create application with options
 	err := wails.Run(&options.App{
@@ -51,6 +52,7 @@ func main() {
 			windowService.Startup(ctx)
 			scriptService.Startup(ctx)
 			categoryService.Startup(ctx)
+			translationService.Startup(ctx)
 		},
 		OnShutdown: func(ctx context.Context) {
 			windowService.Shutdown(ctx)
@@ -60,6 +62,7 @@ func main() {
 			windowService,
 			scriptService,
 			categoryService,
+			translationService,
 		},
 	})
 

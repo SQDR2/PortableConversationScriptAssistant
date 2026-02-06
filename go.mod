@@ -5,6 +5,8 @@ go 1.23
 require (
 	github.com/jezek/xgb v1.3.0
 	github.com/jezek/xgbutil v0.0.0-20260124183602-9fd151d6a51a
+	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.3.44
+	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/tmt v1.1.45
 	github.com/wailsapp/wails/v2 v2.11.0
 	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.31.1

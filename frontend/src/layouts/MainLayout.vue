@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, inject, computed, type Ref } from 'vue'
 import { utils } from '../../wailsjs/go/models'
+import TranslationBar from '../components/TranslationBar.vue'
 
 const leftDrawerOpen = ref(false)
 
@@ -11,6 +12,11 @@ const targetProcess = computed(() => selectedTarget.value?.process || '')
 const targetHandle = computed(() => selectedTarget.value?.handle || '')
 
 const emit = defineEmits(['open-target-dialog'])
+const showTranslation = ref(true)
+
+function toggleTranslation() {
+  showTranslation.value = !showTranslation.value
+}
 
 function toggleLeftDrawer() {
   leftDrawerOpen.value = !leftDrawerOpen.value
@@ -25,7 +31,16 @@ function toggleLeftDrawer() {
 
         <q-toolbar-title> Sidekick 话术助手 </q-toolbar-title>
 
-        <div>v0.0.1</div>
+        <q-btn
+          dense
+          flat
+          round
+          icon="translate"
+          @click="toggleTranslation"
+          :color="showTranslation ? 'primary' : 'grey'">
+          <q-tooltip>切换翻译栏</q-tooltip>
+        </q-btn>
+        <div class="q-ml-sm">v0.0.1</div>
       </q-toolbar>
     </q-header>
 
@@ -72,6 +87,10 @@ function toggleLeftDrawer() {
     <q-page-container>
       <router-view />
     </q-page-container>
+
+    <q-footer v-if="showTranslation" elevated class="glass-footer">
+      <TranslationBar />
+    </q-footer>
   </q-layout>
 </template>
 
@@ -160,5 +179,20 @@ body.body--dark {
   .drawer-item:hover {
     background: rgba(66, 165, 245, 0.14);
   }
+}
+</style>
+
+<style scoped>
+.glass-footer {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  color: black;
+}
+
+body.body--dark .glass-footer {
+  background: rgba(30, 30, 30, 0.95);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  color: white;
 }
 </style>

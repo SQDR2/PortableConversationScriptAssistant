@@ -193,10 +193,14 @@ const categoryOptions = computed(() => {
 })
 
 onMounted(loadData)
+
+function tweakPageHeight(offset: number) {
+  return { height: `calc(100vh - ${offset}px)` }
+}
 </script>
 
 <template>
-  <q-page class="q-pa-md column no-wrap" style="height: calc(100vh - 50px)">
+  <q-page class="q-pa-md column no-wrap" :style-fn="tweakPageHeight">
     <!-- Header: Search & Actions -->
     <div class="row q-mb-sm items-center q-gutter-sm">
       <q-input dense outlined v-model="searchText" placeholder="搜索..." class="col" debounce="300">
