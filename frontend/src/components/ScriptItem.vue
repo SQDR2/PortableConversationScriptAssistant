@@ -99,17 +99,18 @@ function confirmDelete() {
           <div class="text-body1 q-mb-md preserve-whitespace">{{ script.content }}</div>
 
           <div v-if="scriptImages.length > 0" class="q-gutter-y-md">
-            <q-img
+            <!-- Use native img for better right-click menu support -->
+            <img
               v-for="(img, index) in scriptImages"
               :key="index"
               :src="img"
-              class="rounded-borders shadow-1"
-              spinner-color="primary" />
+              class="rounded-borders shadow-1 full-width preview-img"
+              loading="lazy" />
           </div>
         </q-card-section>
 
         <q-card-actions align="right">
-          <q-btn flat label="复制内容" color="primary" @click="copyContent" />
+          <q-btn flat label="复制全文" color="primary" @click="copyContent" />
           <q-btn flat label="关闭" v-close-popup />
         </q-card-actions>
       </q-card>
@@ -141,6 +142,12 @@ function confirmDelete() {
 .preserve-whitespace {
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+.preview-img {
+  display: block;
+  max-width: 100%;
+  height: auto;
 }
 
 .thumbnail-preview {
