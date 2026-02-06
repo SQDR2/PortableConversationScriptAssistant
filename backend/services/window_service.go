@@ -32,6 +32,9 @@ type WindowService struct {
 	initialAlignRetries int
 	decorationHeight    int
 	decorationKnown     bool
+	sidekickHWID        string
+	lastTargetFocused   bool
+	isAlwaysOnTop       bool
 }
 
 func NewWindowService() *WindowService {
@@ -84,6 +87,10 @@ func (s *WindowService) SetTarget(handle string) {
 	s.decorationKnown = false
 	s.mu.Unlock()
 
+	// Cleanup any lingering sticky states
+	runtime.WindowSetAlwaysOnTop(s.ctx, false)
+	utils.ForceLowerWindowByTitle("sidekick")
+
 	runtime.LogInfof(s.ctx, "Target set to: %s", handle)
 
 	// Immediately align to new target
@@ -133,55 +140,61 @@ func (s *WindowService) checkTarget() {
 		return
 	}
 
-	// Check if changed
-	shouldForceUpdate := s.forceUpdate || s.initialAlignRetries > 0
-	if s.hasLast && s.lastRect == rect && s.lastIconic == isIconic && !shouldForceUpdate {
-		return
-	}
+	foreground := s.provider.GetForegroundHandle()
+	isTargetForeground := (foreground != "" && foreground == target)
 
-	// Restore Skip Logic: When target is restored, WM needs time to update coordinates
-	// If it was just restored, skip positioning for a few ticks to avoid jumping to (0,0)
-	if s.hasLast && s.lastIconic && !isIconic {
-		s.restoreSkipCount = 2 // Skip 100ms (2 * 50ms) for stability
-		s.forceUpdate = true
-		s.hasLast = false
-		runtime.LogInfof(s.ctx, "Target restored, delaying positioning for stability")
-	}
-
+	// 1. Visibility Synchronizer (Min/Max/Restore)
 	if isIconic {
 		if !s.isSidekickMinimized {
 			runtime.WindowMinimise(s.ctx)
 			s.isSidekickMinimized = true
+			s.isSidekickHidden = true
+			s.forceUpdate = false
+			s.initialAlignRetries = 0
+			runtime.LogInfof(s.ctx, "Target minimized, sidekick following")
 		}
-	} else {
-		// Ensure window is not minimized or maximized before aligning
+		// In iconic state, we update tracker and STOP early to avoid phantom popups
+		goto update_tracker
+	}
+
+	if s.isSidekickMinimized {
+		// Target RESTORED
 		runtime.WindowUnminimise(s.ctx)
-		runtime.WindowUnmaximise(s.ctx)
-		if s.isSidekickMinimized {
-			s.isSidekickMinimized = false
-		}
-		if s.isSidekickHidden {
-			runtime.WindowShow(s.ctx)
-			s.isSidekickHidden = false
-		}
+		runtime.WindowShow(s.ctx)
+		s.isSidekickMinimized = false
+		s.isSidekickHidden = false
+		s.forceUpdate = true
+		s.initialAlignRetries = 3
+		runtime.LogInfof(s.ctx, "Target restored, resuming sidekick")
+	}
 
-		// Stability: Wait for WM to settle if recently restored
-		if s.restoreSkipCount > 0 {
-			s.restoreSkipCount--
-			runtime.LogInfof(s.ctx, "Skipping position update (restore delay: %d ticks left)", s.restoreSkipCount)
-			// Don't update lastRect to force re-check once settled
-			s.lastIconic = isIconic // But update iconic state
-			return
-		}
+	if s.sidekickHWID == "" {
+		s.sidekickHWID = s.provider.GetHandleByTitle("sidekick")
+	}
 
+	// 2. Relative Stacking & Visibility (Active Guard)
+	if s.isSidekickHidden {
+		runtime.WindowShow(s.ctx)
+		s.isSidekickHidden = false
+	}
+
+	if s.sidekickHWID != "" && target != "" {
+		_ = s.provider.StackAbove(s.sidekickHWID, target)
+	}
+
+	// Stability: Skip specific alignment logic during restore transient period
+	if s.restoreSkipCount > 0 {
+		s.restoreSkipCount--
+		goto update_tracker
+	}
+
+	// 3. Alignment Logic
+	{
 		// Stick to the RIGHT side of the target (outside)
 		if !s.decorationKnown {
 			if dh, err := utils.GetWindowDecorationHeightByTitle("sidekick"); err == nil {
 				s.decorationHeight = dh
 				s.decorationKnown = true
-				runtime.LogInfof(s.ctx, "Detected sidekick decoration height: %d", dh)
-			} else {
-				runtime.LogErrorf(s.ctx, "Failed to detect decoration height: %v", err)
 			}
 		}
 		sw, _ := runtime.WindowGetSize(s.ctx)
@@ -197,30 +210,25 @@ func (s *WindowService) checkTarget() {
 
 		runtime.WindowSetPosition(s.ctx, newX, newY)
 		actualX, actualY := runtime.WindowGetPosition(s.ctx)
-		actualW, actualH := runtime.WindowGetSize(s.ctx)
 		if actualX != newX || actualY != newY {
-			err := utils.ForceMoveResizeWindowByTitle("sidekick", newX, newY, actualW, newHeight)
-			if err != nil {
-				runtime.LogErrorf(s.ctx, "Force move sidekick failed: %v", err)
-			} else {
-				actualX, actualY = runtime.WindowGetPosition(s.ctx)
-				actualW, actualH = runtime.WindowGetSize(s.ctx)
-			}
+			w, _ := runtime.WindowGetSize(s.ctx)
+			_ = utils.ForceMoveResizeWindowByTitle("sidekick", newX, newY, w, newHeight)
 		}
-		runtime.LogInfof(s.ctx, "Aligned sidekick to target: x=%d y=%d h=%d (actual: x=%d y=%d w=%d h=%d)", newX, newY, newHeight, actualX, actualY, actualW, actualH)
+
 		if s.initialAlignRetries > 0 {
 			s.initialAlignRetries--
-		}
-		if s.initialAlignRetries == 0 {
+		} else {
 			s.forceUpdate = false
 		}
 	}
 
+update_tracker:
 	s.lastRect = rect
 	s.lastIconic = isIconic
+	s.lastTargetFocused = isTargetForeground
 	s.hasLast = true
 
-	// Emit event to frontend for UI updates if needed
+	// Emit event to frontend
 	runtime.EventsEmit(s.ctx, "window-position-update", map[string]interface{}{
 		"rect":     rect,
 		"isIconic": isIconic,

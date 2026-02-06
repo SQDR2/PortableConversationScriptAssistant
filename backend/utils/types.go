@@ -18,5 +18,8 @@ type WindowInfo struct {
 type WindowProvider interface {
 	GetWindows() ([]WindowInfo, error)
 	GetWindowRect(handle string) (Rect, bool, error)
+	GetForegroundHandle() string
+	GetHandleByTitle(title string) string
+	StackAbove(handle string, siblingHandle string) error
 	Close() error
 }
