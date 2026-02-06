@@ -10,5 +10,6 @@
     "name": "zhenglw",
     "email": "3220064721@qq.com"
   },
-  "rebuild:ignore": ["*.db", "images/*"]
+  "rebuild:ignore": ["*.db", "images/*"],
+  "version": "v2.0.0"
 }
