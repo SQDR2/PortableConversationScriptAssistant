@@ -202,11 +202,91 @@ func GetWindowDecorationHeightByTitle(title string) (int, error) {
 }
 
 func GetDWMFrameOffsetsByTitle(title string) (FrameOffsets, error) {
-	// DWM is Windows-only; Linux has no shadow offset issue
+	// On Linux, X11 Geometry() and Resize() operate on the client area
+	// (excluding WM decorations like title bar and borders).
+	// We need to compensate: if sidekick has WM decorations, setting
+	// client height = target height will make the visual window taller
+	// than the target by the decoration amount.
+	// Return negative Bottom offset = -(top + bottom extents) so that
+	// the alignment formula: newHeight = targetHeight + Top + Bottom
+	// becomes: newHeight = targetHeight - totalDecorationHeight.
+	X, err := xgbutil.NewConn()
+	if err != nil {
+		return FrameOffsets{}, nil
+	}
+	defer X.Conn().Close()
+
+	clientIds, err := ewmh.ClientListGet(X)
+	if err != nil {
+		return FrameOffsets{}, nil
+	}
+
+	for _, id := range clientIds {
+		name, err := ewmh.WmNameGet(X, id)
+		if err != nil || name == "" {
+			name, _ = icccm.WmNameGet(X, id)
+		}
+		if !strings.Contains(name, title) {
+			continue
+		}
+
+		_ = ewmh.RequestFrameExtents(X, id)
+		extents, err := ewmh.FrameExtentsGet(X, id)
+		if err != nil || extents == nil {
+			return FrameOffsets{}, nil
+		}
+
+		// Total decoration height that makes the visual window taller
+		// than the client area set by Resize()
+		totalDecor := int(extents.Top + extents.Bottom)
+		return FrameOffsets{
+			Top:    0,
+			Bottom: -totalDecor, // negative: shrink client area to compensate
+			Left:   0,
+			Right:  0,
+		}, nil
+	}
+
 	return FrameOffsets{}, nil
 }
 
 func GetWindowPhysicalWidthByTitle(title string) (int, error) {
+	X, err := xgbutil.NewConn()
+	if err != nil {
+		return 0, nil
+	}
+	defer X.Conn().Close()
+
+	clientIds, err := ewmh.ClientListGet(X)
+	if err != nil {
+		return 0, nil
+	}
+
+	for _, id := range clientIds {
+		name, err := ewmh.WmNameGet(X, id)
+		if err != nil || name == "" {
+			name, _ = icccm.WmNameGet(X, id)
+		}
+		if !strings.Contains(name, title) {
+			continue
+		}
+
+		geom, err := xwindow.New(X, id).Geometry()
+		if err != nil {
+			return 0, nil
+		}
+
+		// On Linux, Geometry().Width() is the client area width.
+		// Add frame extents (left + right borders) to get visual width.
+		totalWidth := geom.Width()
+		_ = ewmh.RequestFrameExtents(X, id)
+		extents, err := ewmh.FrameExtentsGet(X, id)
+		if err == nil && extents != nil {
+			totalWidth += int(extents.Left + extents.Right)
+		}
+		return totalWidth, nil
+	}
+
 	return 0, nil
 }
 
