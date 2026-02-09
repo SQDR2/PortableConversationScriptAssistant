@@ -50,10 +50,22 @@ func GetDWMFrameOffsetsByTitle(title string) (FrameOffsets, error) {
 	return FrameOffsets{}, nil
 }
 
+func GetDWMFrameOffsets(handleStr string) (FrameOffsets, error) {
+	return FrameOffsets{}, nil
+}
+
 func GetWindowPhysicalWidthByTitle(title string) (int, error) {
 	return 0, nil
 }
 
+func GetWindowPhysicalWidth(handleStr string) (int, error) {
+	return 0, nil
+}
+
 func ForceMoveResizeWindowByTitle(title string, x int, y int, width int, height int) error {
+	return nil
+}
+
+func ForceMoveResizeWindow(handleStr string, x int, y int, width int, height int) error {
 	return nil
 }

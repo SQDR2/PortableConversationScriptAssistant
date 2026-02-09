@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sidekick/backend/db"
@@ -19,20 +20,44 @@ type ScriptService struct {
 	ctx context.Context
 }
 
+func (s *ScriptService) logInfof(format string, args ...interface{}) {
+	if s.ctx != nil {
+		runtime.LogInfof(s.ctx, format, args...)
+		return
+	}
+	log.Printf("[ScriptService] "+format, args...)
+}
+
+func (s *ScriptService) logInfo(msg string) {
+	if s.ctx != nil {
+		runtime.LogInfo(s.ctx, msg)
+		return
+	}
+	log.Printf("[ScriptService] %s", msg)
+}
+
+func (s *ScriptService) logErrorf(format string, args ...interface{}) {
+	if s.ctx != nil {
+		runtime.LogErrorf(s.ctx, format, args...)
+		return
+	}
+	log.Printf("[ScriptService][ERROR] "+format, args...)
+}
+
 func NewScriptService() *ScriptService {
 	return &ScriptService{}
 }
 
 func (s *ScriptService) Startup(ctx context.Context) {
 	s.ctx = ctx
-	runtime.LogInfo(s.ctx, "ScriptService starting up...")
+	s.logInfo("ScriptService starting up...")
 	// Auto migrate
 	if db.DB != nil {
 		err := db.DB.AutoMigrate(&models.Category{}, &models.Script{})
 		if err != nil {
-			runtime.LogErrorf(s.ctx, "Failed to migrate database: %v", err)
+			s.logErrorf("Failed to migrate database: %v", err)
 		}
-		runtime.LogInfo(s.ctx, "Database migration complete")
+		s.logInfo("Database migration complete")
 		s.setupFTS()
 	}
 }
@@ -47,6 +72,11 @@ func (s *ScriptService) setupFTS() {
 }
 
 func (s *ScriptService) CreateScript(content string, tags string, categoryID *uint, images string) (*models.Script, error) {
+	if db.DB == nil {
+		err := fmt.Errorf("database not initialized")
+		s.logErrorf("CreateScript failed: %v", err)
+		return nil, err
+	}
 	script := &models.Script{
 		Content:    content,
 		Tags:       tags,
@@ -58,6 +88,11 @@ func (s *ScriptService) CreateScript(content string, tags string, categoryID *ui
 }
 
 func (s *ScriptService) UpdateScript(id uint, content string, tags string, categoryID *uint, images string) (*models.Script, error) {
+	if db.DB == nil {
+		err := fmt.Errorf("database not initialized")
+		s.logErrorf("UpdateScript failed: %v", err)
+		return nil, err
+	}
 	var script models.Script
 	if err := db.DB.First(&script, id).Error; err != nil {
 		return nil, err
@@ -73,6 +108,11 @@ func (s *ScriptService) UpdateScript(id uint, content string, tags string, categ
 }
 
 func (s *ScriptService) DeleteScript(id uint) error {
+	if db.DB == nil {
+		err := fmt.Errorf("database not initialized")
+		s.logErrorf("DeleteScript failed: %v", err)
+		return err
+	}
 	var script models.Script
 	if err := db.DB.First(&script, id).Error; err == nil {
 		if script.Images != "" {
@@ -90,19 +130,27 @@ func (s *ScriptService) DeleteScript(id uint) error {
 }
 
 func (s *ScriptService) ListScripts(page int, pageSize int) ([]models.Script, error) {
-	runtime.LogInfof(s.ctx, "ListScripts called: page=%d, pageSize=%d", page, pageSize)
-	var scripts []models.Script
+	s.logInfof("ListScripts called: page=%d, pageSize=%d", page, pageSize)
+	scripts := make([]models.Script, 0)
+	if db.DB == nil {
+		err := fmt.Errorf("database not initialized")
+		s.logErrorf("ListScripts failed: %v", err)
+		return scripts, err
+	}
 	offset := (page - 1) * pageSize
 	result := db.DB.Order("created_at desc").Offset(offset).Limit(pageSize).Find(&scripts)
 	if result.Error != nil {
-		runtime.LogErrorf(s.ctx, "ListScripts DB error: %v", result.Error)
+		s.logErrorf("ListScripts DB error: %v", result.Error)
 	}
-	runtime.LogInfof(s.ctx, "ListScripts found %d records", len(scripts))
+	s.logInfof("ListScripts found %d records", len(scripts))
 	return scripts, result.Error
 }
 
 func (s *ScriptService) SearchScripts(query string) ([]models.Script, error) {
-	var scripts []models.Script
+	scripts := make([]models.Script, 0)
+	if db.DB == nil {
+		return scripts, fmt.Errorf("database not initialized")
+	}
 	searchQuery := "%" + query + "%"
 	// Standard LIKE search
 	result := db.DB.Where("content LIKE ? OR tags LIKE ?", searchQuery, searchQuery).
@@ -113,6 +161,9 @@ func (s *ScriptService) SearchScripts(query string) ([]models.Script, error) {
 }
 
 func (s *ScriptService) ImportScripts(scripts []string) (int, error) {
+	if db.DB == nil {
+		return 0, fmt.Errorf("database not initialized")
+	}
 	count := 0
 	tx := db.DB.Begin()
 	for _, part := range scripts {

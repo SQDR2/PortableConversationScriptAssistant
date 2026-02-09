@@ -33,6 +33,7 @@ type WindowService struct {
 	frameOffsets        utils.FrameOffsets
 	frameOffsetsKnown   bool
 	sidekickHWID        string
+	lastSidekickLookup  time.Time
 	lastTargetFocused   bool
 	isAlwaysOnTop       bool
 }
@@ -175,7 +176,11 @@ func (s *WindowService) checkTarget() {
 	}
 
 	if s.sidekickHWID == "" {
-		s.sidekickHWID = s.provider.GetHandleByTitle("sidekick")
+		// Avoid hot-looping window enumeration if the handle isn't available yet.
+		if s.lastSidekickLookup.IsZero() || time.Since(s.lastSidekickLookup) > time.Second {
+			s.lastSidekickLookup = time.Now()
+			s.sidekickHWID = s.provider.GetHandleByTitle("sidekick")
+		}
 	}
 
 	// 2. Relative Stacking & Visibility (Active Guard)
@@ -198,8 +203,8 @@ func (s *WindowService) checkTarget() {
 	{
 		// Stick to the RIGHT side of the target (outside)
 		// Get sidekick's DWM frame offsets (shadow compensation) for precise alignment
-		if !s.frameOffsetsKnown {
-			if offsets, err := utils.GetDWMFrameOffsetsByTitle("sidekick"); err == nil {
+		if !s.frameOffsetsKnown && s.sidekickHWID != "" {
+			if offsets, err := utils.GetDWMFrameOffsets(s.sidekickHWID); err == nil {
 				s.frameOffsets = offsets
 				s.frameOffsetsKnown = true
 			}
@@ -216,14 +221,25 @@ func (s *WindowService) checkTarget() {
 		newY := rect.Top - s.frameOffsets.Top    // sidekick visual top = target visual top
 
 		// Get current sidekick physical pixel width (bypass Wails DPI scaling)
-		sw, err := utils.GetWindowPhysicalWidthByTitle("sidekick")
-		if err != nil || sw <= 0 {
-			sw = 350 // fallback default width
+		sw := 350
+		if s.sidekickHWID != "" {
+			w, err := utils.GetWindowPhysicalWidth(s.sidekickHWID)
+			if err != nil {
+				// Handle may have become invalid (e.g., window recreated); clear and re-resolve later.
+				s.sidekickHWID = ""
+				s.frameOffsetsKnown = false
+			} else if w > 0 {
+				sw = w
+			}
 		}
 
-		// Directly use Win32 SetWindowPos to bypass Wails DPI scaling and monitor offset
+		// Directly use native APIs to bypass Wails DPI scaling and monitor offset
 		if newHeight > 0 {
-			_ = utils.ForceMoveResizeWindowByTitle("sidekick", newX, newY, sw, newHeight)
+			if s.sidekickHWID != "" {
+				_ = utils.ForceMoveResizeWindow(s.sidekickHWID, newX, newY, sw, newHeight)
+			} else {
+				_ = utils.ForceMoveResizeWindowByTitle("sidekick", newX, newY, sw, newHeight)
+			}
 		}
 
 		if s.initialAlignRetries > 0 {

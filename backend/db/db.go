@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"gorm.io/driver/sqlite"
+	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -34,8 +34,12 @@ func InitDB(appDataDir string) error {
 	}
 
 	// Enable WAL mode for better concurrency
-	db.Exec("PRAGMA journal_mode = WAL;")
-	db.Exec("PRAGMA foreign_keys = ON;")
+	if err := db.Exec("PRAGMA journal_mode = WAL;").Error; err != nil {
+		log.Printf("[db] PRAGMA journal_mode=WAL not supported or failed; continuing without WAL: %v", err)
+	}
+	if err := db.Exec("PRAGMA foreign_keys = ON;").Error; err != nil {
+		log.Printf("[db] PRAGMA foreign_keys=ON not supported or failed; continuing without foreign key enforcement: %v", err)
+	}
 
 	DB = db
 	return nil

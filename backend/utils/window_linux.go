@@ -165,6 +165,26 @@ func ForceMoveResizeWindowByTitle(title string, x int, y int, width int, height 
 	return fmt.Errorf("window not found: %s", title)
 }
 
+func ForceMoveResizeWindow(handleStr string, x int, y int, width int, height int) error {
+	var id uint32
+	if _, err := fmt.Sscanf(handleStr, "%d", &id); err != nil || id == 0 {
+		return fmt.Errorf("invalid handle")
+	}
+
+	X, err := xgbutil.NewConn()
+	if err != nil {
+		return fmt.Errorf("failed to connect to X: %w", err)
+	}
+	defer X.Conn().Close()
+
+	win := xwindow.New(X, xproto.Window(id))
+	if width > 0 && height > 0 {
+		win.Resize(width, height)
+	}
+	win.Move(x, y)
+	return nil
+}
+
 func GetWindowDecorationHeightByTitle(title string) (int, error) {
 	X, err := xgbutil.NewConn()
 	if err != nil {
@@ -250,6 +270,28 @@ func GetDWMFrameOffsetsByTitle(title string) (FrameOffsets, error) {
 	return FrameOffsets{}, nil
 }
 
+func GetDWMFrameOffsets(handleStr string) (FrameOffsets, error) {
+	var id uint32
+	if _, err := fmt.Sscanf(handleStr, "%d", &id); err != nil || id == 0 {
+		return FrameOffsets{}, nil
+	}
+
+	X, err := xgbutil.NewConn()
+	if err != nil {
+		return FrameOffsets{}, nil
+	}
+	defer X.Conn().Close()
+
+	_ = ewmh.RequestFrameExtents(X, xproto.Window(id))
+	extents, err := ewmh.FrameExtentsGet(X, xproto.Window(id))
+	if err != nil || extents == nil {
+		return FrameOffsets{}, nil
+	}
+
+	totalDecor := int(extents.Top + extents.Bottom)
+	return FrameOffsets{Top: 0, Bottom: -totalDecor, Left: 0, Right: 0}, nil
+}
+
 func GetWindowPhysicalWidthByTitle(title string) (int, error) {
 	X, err := xgbutil.NewConn()
 	if err != nil {
@@ -288,6 +330,32 @@ func GetWindowPhysicalWidthByTitle(title string) (int, error) {
 	}
 
 	return 0, nil
+}
+
+func GetWindowPhysicalWidth(handleStr string) (int, error) {
+	var id uint32
+	if _, err := fmt.Sscanf(handleStr, "%d", &id); err != nil || id == 0 {
+		return 0, nil
+	}
+
+	X, err := xgbutil.NewConn()
+	if err != nil {
+		return 0, nil
+	}
+	defer X.Conn().Close()
+
+	geom, err := xwindow.New(X, xproto.Window(id)).Geometry()
+	if err != nil {
+		return 0, nil
+	}
+
+	totalWidth := geom.Width()
+	_ = ewmh.RequestFrameExtents(X, xproto.Window(id))
+	extents, err := ewmh.FrameExtentsGet(X, xproto.Window(id))
+	if err == nil && extents != nil {
+		totalWidth += int(extents.Left + extents.Right)
+	}
+	return totalWidth, nil
 }
 
 func ForceRaiseWindowByTitle(title string) error {

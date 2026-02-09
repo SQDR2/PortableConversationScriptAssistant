@@ -69,7 +69,7 @@ func main() {
 			cwd, _ := os.Getwd()
 			if err := db.InitDB(cwd); err != nil {
 				runtime.LogErrorf(ctx, "Failed to init DB: %v", err)
-				utils.LogError("startup_db", err)
+				utils.LogError("db_init_error", err)
 			}
 
 			app.startup(ctx)
