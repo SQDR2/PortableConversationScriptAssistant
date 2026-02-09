@@ -30,8 +30,8 @@ type WindowService struct {
 	restoreSkipCount    int
 	forceUpdate         bool
 	initialAlignRetries int
-	decorationHeight    int
-	decorationKnown     bool
+	frameOffsets        utils.FrameOffsets
+	frameOffsetsKnown   bool
 	sidekickHWID        string
 	lastTargetFocused   bool
 	isAlwaysOnTop       bool
@@ -84,7 +84,7 @@ func (s *WindowService) SetTarget(handle string) {
 	s.restoreSkipCount = 0
 	s.initialAlignRetries = 3
 	s.isSidekickMinimized = false
-	s.decorationKnown = false
+	s.frameOffsetsKnown = false
 	s.mu.Unlock()
 
 	// Cleanup any lingering sticky states
@@ -191,28 +191,33 @@ func (s *WindowService) checkTarget() {
 	// 3. Alignment Logic
 	{
 		// Stick to the RIGHT side of the target (outside)
-		if !s.decorationKnown {
-			if dh, err := utils.GetWindowDecorationHeightByTitle("sidekick"); err == nil {
-				s.decorationHeight = dh
-				s.decorationKnown = true
+		// Get sidekick's DWM frame offsets (shadow compensation) for precise alignment
+		if !s.frameOffsetsKnown {
+			if offsets, err := utils.GetDWMFrameOffsetsByTitle("sidekick"); err == nil {
+				s.frameOffsets = offsets
+				s.frameOffsetsKnown = true
 			}
 		}
-		sw, _ := runtime.WindowGetSize(s.ctx)
-		newHeight := rect.Bottom - rect.Top
-		if s.decorationKnown && newHeight > s.decorationHeight {
-			newHeight = newHeight - s.decorationHeight
-		}
-		if newHeight > 0 {
-			runtime.WindowSetSize(s.ctx, sw, newHeight)
-		}
-		newX := rect.Right
-		newY := rect.Top
 
-		runtime.WindowSetPosition(s.ctx, newX, newY)
-		actualX, actualY := runtime.WindowGetPosition(s.ctx)
-		if actualX != newX || actualY != newY {
-			w, _ := runtime.WindowGetSize(s.ctx)
-			_ = utils.ForceMoveResizeWindowByTitle("sidekick", newX, newY, w, newHeight)
+		// rect is the target's DWM visual bounds (no shadow)
+		targetVisualHeight := rect.Bottom - rect.Top
+
+		// Calculate SetWindowPos parameters that align sidekick's visual bounds
+		// with the target's visual bounds.
+		// shadow offsets: the gap between GetWindowRect and DWM visual bounds.
+		newHeight := targetVisualHeight + s.frameOffsets.Top + s.frameOffsets.Bottom
+		newX := rect.Right - s.frameOffsets.Left // sidekick visual left edge = target visual right edge
+		newY := rect.Top - s.frameOffsets.Top    // sidekick visual top = target visual top
+
+		// Get current sidekick physical pixel width (bypass Wails DPI scaling)
+		sw, err := utils.GetWindowPhysicalWidthByTitle("sidekick")
+		if err != nil || sw <= 0 {
+			sw = 350 // fallback default width
+		}
+
+		// Directly use Win32 SetWindowPos to bypass Wails DPI scaling and monitor offset
+		if newHeight > 0 {
+			_ = utils.ForceMoveResizeWindowByTitle("sidekick", newX, newY, sw, newHeight)
 		}
 
 		if s.initialAlignRetries > 0 {

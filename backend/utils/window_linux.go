@@ -201,6 +201,15 @@ func GetWindowDecorationHeightByTitle(title string) (int, error) {
 	return 0, fmt.Errorf("window not found: %s", title)
 }
 
+func GetDWMFrameOffsetsByTitle(title string) (FrameOffsets, error) {
+	// DWM is Windows-only; Linux has no shadow offset issue
+	return FrameOffsets{}, nil
+}
+
+func GetWindowPhysicalWidthByTitle(title string) (int, error) {
+	return 0, nil
+}
+
 func ForceRaiseWindowByTitle(title string) error {
 	X, err := xgbutil.NewConn()
 	if err != nil {

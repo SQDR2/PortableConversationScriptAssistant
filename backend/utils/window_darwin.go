@@ -46,6 +46,14 @@ func GetWindowDecorationHeightByTitle(title string) (int, error) {
 	return 0, nil
 }
 
+func GetDWMFrameOffsetsByTitle(title string) (FrameOffsets, error) {
+	return FrameOffsets{}, nil
+}
+
+func GetWindowPhysicalWidthByTitle(title string) (int, error) {
+	return 0, nil
+}
+
 func ForceMoveResizeWindowByTitle(title string, x int, y int, width int, height int) error {
 	return nil
 }

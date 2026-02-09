@@ -37,6 +37,85 @@ type winRect struct {
 	Bottom int32
 }
 
+// GetDWMFrameOffsetsByTitle finds a window by title and returns the pixel offsets
+// between GetWindowRect (includes shadow) and DWM Extended Frame Bounds (visual bounds).
+func GetDWMFrameOffsetsByTitle(title string) (FrameOffsets, error) {
+	matched := findWindowByTitle(title)
+	if matched == 0 {
+		return FrameOffsets{}, fmt.Errorf("window not found: %s", title)
+	}
+
+	var wr winRect
+	ret, _, _ := procGetWindowRect.Call(uintptr(matched), uintptr(unsafe.Pointer(&wr)))
+	if ret == 0 {
+		return FrameOffsets{}, fmt.Errorf("failed to get window rect")
+	}
+
+	var dwm winRect
+	ret, _, _ = procDwmGetWindowAttribute.Call(
+		uintptr(matched),
+		uintptr(DWMWA_EXTENDED_FRAME_BOUNDS),
+		uintptr(unsafe.Pointer(&dwm)),
+		uintptr(unsafe.Sizeof(dwm)),
+	)
+	if ret != 0 {
+		// DWM not available, offsets are zero (no shadow)
+		return FrameOffsets{}, nil
+	}
+
+	return FrameOffsets{
+		Top:    int(dwm.Top - wr.Top),
+		Bottom: int(wr.Bottom - dwm.Bottom),
+		Left:   int(dwm.Left - wr.Left),
+		Right:  int(wr.Right - dwm.Right),
+	}, nil
+}
+
+// GetWindowPhysicalWidthByTitle returns the physical pixel width of a window
+// (from GetWindowRect, not DPI-scaled).
+func GetWindowPhysicalWidthByTitle(title string) (int, error) {
+	matched := findWindowByTitle(title)
+	if matched == 0 {
+		return 0, fmt.Errorf("window not found: %s", title)
+	}
+
+	var wr winRect
+	ret, _, _ := procGetWindowRect.Call(uintptr(matched), uintptr(unsafe.Pointer(&wr)))
+	if ret == 0 {
+		return 0, fmt.Errorf("failed to get window rect")
+	}
+
+	return int(wr.Right - wr.Left), nil
+}
+
+// findWindowByTitle searches for a visible window containing the given title.
+func findWindowByTitle(title string) syscall.Handle {
+	var matched syscall.Handle
+
+	cb := syscall.NewCallback(func(hwnd syscall.Handle, lparam uintptr) uintptr {
+		if isVisible, _, _ := procIsWindowVisible.Call(uintptr(hwnd)); isVisible == 0 {
+			return 1
+		}
+
+		var buf [256]uint16
+		len, _, _ := procGetWindowTextW.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&buf[0])), 256)
+		if len == 0 {
+			return 1
+		}
+
+		titleStr := syscall.UTF16ToString(buf[:])
+		if !strings.Contains(titleStr, title) {
+			return 1
+		}
+
+		matched = hwnd
+		return 0
+	})
+
+	procEnumWindows.Call(cb, 0)
+	return matched
+}
+
 func GetWindowDecorationHeightByTitle(title string) (int, error) {
 	var matched syscall.Handle
 	var matchedTitle string
