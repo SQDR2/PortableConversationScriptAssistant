@@ -123,6 +123,12 @@ func (s *WindowService) StopPolling() {
 }
 
 func (s *WindowService) checkTarget() {
+	defer func() {
+		if r := recover(); r != nil {
+			utils.LogError("check_target_panic", r)
+		}
+	}()
+
 	s.mu.Lock()
 	target := s.targetHWID
 	s.mu.Unlock()

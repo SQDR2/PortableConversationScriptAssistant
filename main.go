@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sidekick/backend/db"
 	"sidekick/backend/services"
+	"sidekick/backend/utils"
 	"strings"
 
 	"github.com/wailsapp/wails/v2"
@@ -21,6 +22,14 @@ import (
 var assets embed.FS
 
 func main() {
+	// Initialize crash logging (must be first)
+	utils.InitLogDir()
+	defer func() {
+		if r := recover(); r != nil {
+			utils.LogError("panic", r)
+		}
+	}()
+
 	if os.Getenv("XDG_SESSION_TYPE") == "wayland" || os.Getenv("WAYLAND_DISPLAY") != "" {
 		// Force X11 backend for reliable window positioning on Linux
 		_ = os.Setenv("GDK_BACKEND", "x11")
@@ -60,6 +69,7 @@ func main() {
 			cwd, _ := os.Getwd()
 			if err := db.InitDB(cwd); err != nil {
 				runtime.LogErrorf(ctx, "Failed to init DB: %v", err)
+				utils.LogError("startup_db", err)
 			}
 
 			app.startup(ctx)

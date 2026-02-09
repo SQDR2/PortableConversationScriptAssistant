@@ -5,3 +5,4 @@ frontend/dist
 *.db-shm
 *.db-wal
 images/
+logs/
