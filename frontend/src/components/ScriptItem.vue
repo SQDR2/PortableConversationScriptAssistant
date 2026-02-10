@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { models } from '../../wailsjs/go/models'
 import { useQuasar } from 'quasar'
+import { Port } from '../../wailsjs/go/services/MediaServer'
 
 const props = defineProps<{
   script: models.Script
@@ -11,6 +12,15 @@ const emit = defineEmits(['edit', 'delete'])
 
 const $q = useQuasar()
 const showPreview = ref(false)
+const mediaPort = ref(0)
+
+onMounted(async () => {
+  try {
+    mediaPort.value = await Port()
+  } catch (e) {
+    console.error('Failed to get media server port:', e)
+  }
+})
 
 const scriptImages = computed<string[]>(() => {
   try {
@@ -19,6 +29,26 @@ const scriptImages = computed<string[]>(() => {
     return []
   }
 })
+
+const VIDEO_EXTENSIONS = ['.mp4', '.webm']
+function isVideo(path: string): boolean {
+  const lower = path.toLowerCase()
+  return VIDEO_EXTENSIONS.some(ext => lower.endsWith(ext))
+}
+
+function videoMimeType(path: string): string {
+  const lower = path.toLowerCase()
+  if (lower.endsWith('.webm')) return 'video/webm'
+  return 'video/mp4'
+}
+
+/** Build a localhost URL that hits the dedicated MediaServer for video playback */
+function videoSrc(path: string): string {
+  if (!mediaPort.value) return path // fallback
+  // path is like "images/uuid.mp4" – extract the filename
+  const filename = path.split('/').pop() || path
+  return `http://127.0.0.1:${mediaPort.value}/${filename}`
+}
 
 async function copyContent() {
   try {
@@ -64,7 +94,12 @@ function confirmDelete() {
           </q-item-label>
         </div>
         <div v-if="scriptImages.length > 0" class="q-ml-sm">
-          <q-img :src="scriptImages[0]" style="width: 40px; height: 40px" class="rounded-borders thumbnail-preview" />
+          <!-- Video thumbnail: show play icon -->
+          <div v-if="isVideo(scriptImages[0])" class="rounded-borders thumbnail-preview flex flex-center bg-grey-3" style="width: 40px; height: 40px">
+            <q-icon name="play_circle" color="primary" size="sm" />
+          </div>
+          <!-- Image thumbnail -->
+          <q-img v-else :src="scriptImages[0]" style="width: 40px; height: 40px" class="rounded-borders thumbnail-preview" />
           <div v-if="scriptImages.length > 1" class="text-right">
             <q-badge color="orange" size="xs" floating>+{{ scriptImages.length - 1 }}</q-badge>
           </div>
@@ -99,13 +134,22 @@ function confirmDelete() {
           <div class="text-body1 q-mb-md preserve-whitespace">{{ script.content }}</div>
 
           <div v-if="scriptImages.length > 0" class="q-gutter-y-md">
-            <!-- Use native img for better right-click menu support -->
-            <img
-              v-for="(img, index) in scriptImages"
-              :key="index"
-              :src="img"
-              class="rounded-borders shadow-1 full-width preview-img"
-              loading="lazy" />
+            <template v-for="(media, index) in scriptImages" :key="index">
+              <!-- Video player -->
+              <video
+                v-if="isVideo(media)"
+                controls
+                preload="metadata"
+                class="rounded-borders shadow-1 full-width preview-video">
+                <source :src="videoSrc(media)" :type="videoMimeType(media)" />
+              </video>
+              <!-- Image -->
+              <img
+                v-else
+                :src="media"
+                class="rounded-borders shadow-1 full-width preview-img"
+                loading="lazy" />
+            </template>
           </div>
         </q-card-section>
 
@@ -145,6 +189,12 @@ function confirmDelete() {
 }
 
 .preview-img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.preview-video {
   display: block;
   max-width: 100%;
   height: auto;

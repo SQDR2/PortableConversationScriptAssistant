@@ -211,3 +211,87 @@ func (s *ScriptService) SaveScriptImage(base64Data string, ext string) (string, 
 	// Return RELATIVE path for database
 	return filepath.Join("images", fileName), nil
 }
+
+// videoExtensions lists the allowed video file extensions.
+var videoExtensions = map[string]bool{
+	".mp4":  true,
+	".webm": true,
+}
+
+// maxVideoSize is the maximum allowed video file size (50 MB).
+const maxVideoSize int64 = 50 * 1024 * 1024
+
+// SelectAndSaveMedia opens a native file dialog for the user to select a video file,
+// validates it, and copies it to the images/ directory with a UUID v7 filename.
+// Returns the relative path for database storage.
+func (s *ScriptService) SelectAndSaveMedia() (string, error) {
+	if s.ctx == nil {
+		return "", fmt.Errorf("context not initialized")
+	}
+
+	// Open native file dialog filtered for video files
+	selectedPath, err := runtime.OpenFileDialog(s.ctx, runtime.OpenDialogOptions{
+		Title: "选择视频文件",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "视频文件", Pattern: "*.mp4;*.webm"},
+		},
+	})
+	if err != nil {
+		return "", fmt.Errorf("file dialog error: %v", err)
+	}
+	if selectedPath == "" {
+		return "", fmt.Errorf("no file selected")
+	}
+
+	// Validate extension
+	ext := strings.ToLower(filepath.Ext(selectedPath))
+	if !videoExtensions[ext] {
+		return "", fmt.Errorf("不支持的视频格式: %s，仅支持 .mp4 和 .webm", ext)
+	}
+
+	// Validate file exists and check size
+	info, err := os.Stat(selectedPath)
+	if err != nil {
+		return "", fmt.Errorf("文件不存在: %v", err)
+	}
+	if info.Size() > maxVideoSize {
+		return "", fmt.Errorf("视频文件不能超过 50MB（当前 %.1fMB）", float64(info.Size())/(1024*1024))
+	}
+
+	// Validate path safety (no path traversal)
+	cleanPath := filepath.Clean(selectedPath)
+	if strings.Contains(cleanPath, "..") {
+		return "", fmt.Errorf("invalid file path")
+	}
+
+	// Read the source file
+	data, err := os.ReadFile(selectedPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file: %v", err)
+	}
+
+	// Ensure images directory exists
+	cwd, _ := os.Getwd()
+	imagesDir := filepath.Join(cwd, "images")
+	if err := os.MkdirAll(imagesDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create images directory: %v", err)
+	}
+
+	// Generate UUID V7 filename
+	id, err := uuid.NewV7()
+	if err != nil {
+		return "", fmt.Errorf("failed to generate uuid: %v", err)
+	}
+	fileName := id.String() + ext
+	destPath := filepath.Join(imagesDir, fileName)
+
+	// Write file
+	if err := os.WriteFile(destPath, data, 0644); err != nil {
+		return "", fmt.Errorf("failed to write file: %v", err)
+	}
+
+	s.logInfof("Saved media file: %s -> %s", selectedPath, fileName)
+
+	// Return RELATIVE path for database
+	return filepath.Join("images", fileName), nil
+}

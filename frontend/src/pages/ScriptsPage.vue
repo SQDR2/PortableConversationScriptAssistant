@@ -103,6 +103,12 @@ const editorCategoryId = ref<number | null>(null)
 const editorImages = ref<string[]>([])
 const uploadDummy = ref(null)
 
+const VIDEO_EXTENSIONS = ['.mp4', '.webm']
+function isVideo(path: string): boolean {
+  const lower = path.toLowerCase()
+  return VIDEO_EXTENSIONS.some(ext => lower.endsWith(ext))
+}
+
 function openEditor(script?: models.Script) {
   if (script) {
     editingScript.value = script
@@ -145,6 +151,23 @@ async function handleFileUpload(file: File) {
 
 function removeImage(index: number) {
   editorImages.value.splice(index, 1)
+}
+
+async function handleVideoUpload() {
+  try {
+    // @ts-ignore
+    const path = await ScriptService.SelectAndSaveMedia()
+    if (path) {
+      editorImages.value.push(path)
+    }
+  } catch (e: any) {
+    const msg = String(e)
+    // "no file selected" is not an error, user just cancelled
+    if (!msg.includes('no file selected')) {
+      console.error(e)
+      $q.notify({ type: 'negative', message: msg || '视频上传失败' })
+    }
+  }
 }
 
 async function saveScript() {
@@ -348,16 +371,21 @@ function tweakPageHeight(offset: number) {
             style="max-height: 200px; overflow-y: auto" />
           <q-input v-model="editorTags" label="标签 (逗号分隔)" class="q-mt-md" outlined dense />
 
-          <!-- Image Selection -->
+          <!-- Media Attachments (Images + Videos) -->
           <div class="q-mt-lg">
             <div class="row items-center q-mb-sm">
-              <span class="text-subtitle2 text-grey-8">图片附件</span>
+              <span class="text-subtitle2 text-grey-8">媒体附件</span>
               <q-space />
               <span class="text-caption text-grey-6">{{ editorImages.length }} / 10</span>
             </div>
             <div class="row q-gutter-md">
-              <div v-for="(img, index) in editorImages" :key="index" class="relative-position">
-                <q-img :src="img" style="width: 70px; height: 70px" class="rounded-borders shadow-1 border-grey" />
+              <div v-for="(media, index) in editorImages" :key="index" class="relative-position">
+                <!-- Video thumbnail -->
+                <div v-if="isVideo(media)" class="rounded-borders shadow-1 border-grey flex flex-center bg-grey-3" style="width: 70px; height: 70px">
+                  <q-icon name="play_circle" color="primary" size="md" />
+                </div>
+                <!-- Image thumbnail -->
+                <q-img v-else :src="media" style="width: 70px; height: 70px" class="rounded-borders shadow-1 border-grey" />
                 <q-btn
                   round
                   dense
@@ -368,22 +396,32 @@ function tweakPageHeight(offset: number) {
                   style="top: -8px; right: -8px; z-index: 10"
                   @click="removeImage(index)" />
               </div>
-              <q-file
-                v-if="editorImages.length < 10"
-                v-model="uploadDummy"
-                borderless
-                dense
-                accept="image/*"
-                display-value=""
-                @update:model-value="handleFileUpload"
-                style="width: 70px; height: 70px"
-                class="bg-grey-2 rounded-borders overflow-hidden upload-box">
-                <template v-slot:default>
-                  <div class="full-width full-height flex flex-center">
-                    <q-icon name="add_a_photo" color="grey-6" size="sm" />
-                  </div>
-                </template>
-              </q-file>
+              <!-- Upload buttons -->
+              <template v-if="editorImages.length < 10">
+                <q-file
+                  v-model="uploadDummy"
+                  borderless
+                  dense
+                  accept="image/*"
+                  display-value=""
+                  @update:model-value="handleFileUpload"
+                  style="width: 70px; height: 70px"
+                  class="bg-grey-2 rounded-borders overflow-hidden upload-box">
+                  <template v-slot:default>
+                    <div class="full-width full-height flex flex-center column">
+                      <q-icon name="add_a_photo" color="grey-6" size="sm" />
+                      <span class="text-caption text-grey-6" style="font-size: 10px">图片</span>
+                    </div>
+                  </template>
+                </q-file>
+                <div
+                  class="bg-grey-2 rounded-borders overflow-hidden upload-box flex flex-center column cursor-pointer"
+                  style="width: 70px; height: 70px"
+                  @click="handleVideoUpload">
+                  <q-icon name="videocam" color="grey-6" size="sm" />
+                  <span class="text-caption text-grey-6" style="font-size: 10px">视频</span>
+                </div>
+              </template>
             </div>
           </div>
         </q-card-section>

@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"log"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -42,6 +43,14 @@ func main() {
 	scriptService := services.NewScriptService()
 	categoryService := services.NewCategoryService()
 	translationService := services.NewTranslationService()
+	mediaServer := services.NewMediaServer()
+
+	// Start a dedicated local HTTP server for video streaming.
+	// Wails' AssetServer (WebKitGTK custom URI scheme) does not support
+	// Range requests / 206 responses needed for <video> playback.
+	if err := mediaServer.Start(); err != nil {
+		log.Printf("WARNING: media server failed to start: %v", err)
+	}
 
 	// Create application with options
 	err := wails.Run(&options.App{
@@ -54,10 +63,29 @@ func main() {
 				if strings.HasPrefix(r.URL.Path, "/images/") {
 					cwd, _ := os.Getwd()
 					filePath := filepath.Join(cwd, r.URL.Path)
-					if _, err := os.Stat(filePath); err == nil {
-						http.ServeFile(w, r, filePath)
+
+					f, err := os.Open(filePath)
+					if err != nil {
+						http.NotFound(w, r)
 						return
 					}
+					defer f.Close()
+
+					stat, err := f.Stat()
+					if err != nil {
+						http.Error(w, "stat error", http.StatusInternalServerError)
+						return
+					}
+
+					// Explicitly set Content-Type from extension so WebKitGTK
+					// picks the right decoder before any data arrives.
+					if ct := mime.TypeByExtension(filepath.Ext(filePath)); ct != "" {
+						w.Header().Set("Content-Type", ct)
+					}
+
+					// ServeContent handles Range, Last-Modified, etc.
+					http.ServeContent(w, r, stat.Name(), stat.ModTime(), f)
+					return
 				}
 				http.NotFound(w, r)
 			}),
@@ -80,6 +108,7 @@ func main() {
 		},
 		OnShutdown: func(ctx context.Context) {
 			windowService.Shutdown(ctx)
+			mediaServer.Stop(ctx)
 		},
 		Bind: []interface{}{
 			app,
@@ -87,6 +116,7 @@ func main() {
 			scriptService,
 			categoryService,
 			translationService,
+			mediaServer,
 		},
 	})
 

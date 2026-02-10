@@ -26,6 +26,10 @@ export function SearchScripts(arg1) {
   return window['go']['services']['ScriptService']['SearchScripts'](arg1);
 }
 
+export function SelectAndSaveMedia() {
+  return window['go']['services']['ScriptService']['SelectAndSaveMedia']();
+}
+
 export function Startup(arg1) {
   return window['go']['services']['ScriptService']['Startup'](arg1);
 }

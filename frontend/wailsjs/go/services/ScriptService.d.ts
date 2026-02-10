@@ -15,6 +15,8 @@ export function SaveScriptImage(arg1:string,arg2:string):Promise<string>;
 
 export function SearchScripts(arg1:string):Promise<Array<models.Script>>;
 
+export function SelectAndSaveMedia():Promise<string>;
+
 export function Startup(arg1:context.Context):Promise<void>;
 
 export function UpdateScript(arg1:number,arg2:string,arg3:string,arg4:any,arg5:string):Promise<models.Script>;
