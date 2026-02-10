@@ -128,6 +128,7 @@ function openEditor(script?: models.Script) {
     }
     editorImages.value = []
   }
+  uploadDummy.value = null
   showEditor.value = true
 }
 
@@ -144,6 +145,9 @@ async function handleFileUpload(file: File) {
     } catch (e) {
       console.error(e)
       $q.notify({ type: 'negative', message: '图片上传失败' })
+    } finally {
+      // Reset file input so the same (or any) file can be selected again
+      uploadDummy.value = null
     }
   }
   reader.readAsDataURL(file)
@@ -257,7 +261,7 @@ function tweakPageHeight(offset: number) {
 </script>
 
 <template>
-  <q-page class="q-pa-md column no-wrap" style="height: 100%; min-height: unset; display: flex">
+  <q-page :style-fn="tweakPageHeight" class="q-pa-md column no-wrap" style="overflow: hidden">
     <!-- Header: Search & Actions -->
     <div class="row q-mb-sm items-center q-gutter-sm">
       <q-input dense outlined v-model="searchText" placeholder="搜索..." class="col" debounce="300">

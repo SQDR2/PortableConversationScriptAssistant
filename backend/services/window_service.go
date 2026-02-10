@@ -200,10 +200,18 @@ func (s *WindowService) checkTarget() {
 	}
 
 	// 3. Alignment Logic
+	// Skip alignment entirely if sidekickHWID is not yet resolved.
+	// Using a hardcoded default width (350 logical px) as physical pixels
+	// would shrink the window on high-DPI displays. Wait for the next
+	// polling cycle to resolve the handle first.
+	if s.sidekickHWID == "" {
+		goto update_tracker
+	}
+
 	{
 		// Stick to the RIGHT side of the target (outside)
 		// Get sidekick's DWM frame offsets (shadow compensation) for precise alignment
-		if !s.frameOffsetsKnown && s.sidekickHWID != "" {
+		if !s.frameOffsetsKnown {
 			if offsets, err := utils.GetDWMFrameOffsets(s.sidekickHWID); err == nil {
 				s.frameOffsets = offsets
 				s.frameOffsetsKnown = true
@@ -222,24 +230,19 @@ func (s *WindowService) checkTarget() {
 
 		// Get current sidekick physical pixel width (bypass Wails DPI scaling)
 		sw := 350
-		if s.sidekickHWID != "" {
-			w, err := utils.GetWindowPhysicalWidth(s.sidekickHWID)
-			if err != nil {
-				// Handle may have become invalid (e.g., window recreated); clear and re-resolve later.
-				s.sidekickHWID = ""
-				s.frameOffsetsKnown = false
-			} else if w > 0 {
-				sw = w
-			}
+		w, err := utils.GetWindowPhysicalWidth(s.sidekickHWID)
+		if err != nil {
+			// Handle may have become invalid (e.g., window recreated); clear and re-resolve later.
+			s.sidekickHWID = ""
+			s.frameOffsetsKnown = false
+			goto update_tracker
+		} else if w > 0 {
+			sw = w
 		}
 
 		// Directly use native APIs to bypass Wails DPI scaling and monitor offset
 		if newHeight > 0 {
-			if s.sidekickHWID != "" {
-				_ = utils.ForceMoveResizeWindow(s.sidekickHWID, newX, newY, sw, newHeight)
-			} else {
-				_ = utils.ForceMoveResizeWindowByTitle("sidekick", newX, newY, sw, newHeight)
-			}
+			_ = utils.ForceMoveResizeWindow(s.sidekickHWID, newX, newY, sw, newHeight)
 		}
 
 		if s.initialAlignRetries > 0 {

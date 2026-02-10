@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { models } from '../../wailsjs/go/models'
 import { useQuasar } from 'quasar'
 import { Port } from '../../wailsjs/go/services/MediaServer'
+import { WindowFullscreen, WindowUnfullscreen } from '../../wailsjs/runtime/runtime'
 
 const props = defineProps<{
   script: models.Script
@@ -12,9 +13,14 @@ const emit = defineEmits(['edit', 'delete'])
 
 const $q = useQuasar()
 const showPreview = ref(false)
+const showFullscreen = ref(false)
+const fullscreenMedia = ref('')
 const mediaPort = ref(0)
 
 onMounted(async () => {
+  document.addEventListener('fullscreenchange', handleNativeFullscreen)
+  document.addEventListener('webkitfullscreenchange', handleNativeFullscreen)
+
   try {
     mediaPort.value = await Port()
   } catch (e) {
@@ -49,6 +55,50 @@ function videoSrc(path: string): string {
   const filename = path.split('/').pop() || path
   return `http://127.0.0.1:${mediaPort.value}/${filename}`
 }
+
+function openFullscreen(media: string) {
+  fullscreenMedia.value = media
+  showFullscreen.value = true
+  WindowFullscreen()
+}
+
+watch(showFullscreen, (val) => {
+  if (!val) {
+    WindowUnfullscreen()
+  }
+})
+
+/**
+ * Intercept native fullscreen requests on .preview-video elements.
+ * Wails WebView does not render video correctly in native fullscreen,
+ * so we immediately exit and redirect to our custom fullscreen dialog.
+ */
+function handleNativeFullscreen() {
+  const el = (document as any).fullscreenElement || (document as any).webkitFullscreenElement
+  if (!el || !el.classList?.contains('preview-video')) return
+
+  // Exit native fullscreen immediately
+  if (document.exitFullscreen) {
+    document.exitFullscreen().catch(() => {})
+  } else if ((document as any).webkitExitFullscreen) {
+    (document as any).webkitExitFullscreen()
+  }
+
+  // Find the matching media path from the video source
+  const source = el.querySelector('source')
+  const src = source?.getAttribute('src') || ''
+  for (const media of scriptImages.value) {
+    if (videoSrc(media) === src) {
+      openFullscreen(media)
+      break
+    }
+  }
+}
+
+onUnmounted(() => {
+  document.removeEventListener('fullscreenchange', handleNativeFullscreen)
+  document.removeEventListener('webkitfullscreenchange', handleNativeFullscreen)
+})
 
 async function copyContent() {
   try {
@@ -136,13 +186,24 @@ function confirmDelete() {
           <div v-if="scriptImages.length > 0" class="q-gutter-y-md">
             <template v-for="(media, index) in scriptImages" :key="index">
               <!-- Video player -->
-              <video
-                v-if="isVideo(media)"
-                controls
-                preload="metadata"
-                class="rounded-borders shadow-1 full-width preview-video">
-                <source :src="videoSrc(media)" :type="videoMimeType(media)" />
-              </video>
+              <div v-if="isVideo(media)" class="relative-position">
+                <video
+                  controls
+                  controlslist="nofullscreen"
+                  preload="metadata"
+                  class="rounded-borders shadow-1 full-width preview-video">
+                  <source :src="videoSrc(media)" :type="videoMimeType(media)" />
+                </video>
+                <q-btn
+                  icon="fullscreen"
+                  round flat
+                  color="white"
+                  size="sm"
+                  class="video-fullscreen-btn"
+                  @click="openFullscreen(media)">
+                  <q-tooltip>全屏播放</q-tooltip>
+                </q-btn>
+              </div>
               <!-- Image -->
               <img
                 v-else
@@ -158,6 +219,29 @@ function confirmDelete() {
           <q-btn flat label="关闭" v-close-popup />
         </q-card-actions>
       </q-card>
+    </q-dialog>
+
+    <!-- Fullscreen video dialog (custom replacement for native fullscreen) -->
+    <q-dialog v-model="showFullscreen" maximized transition-show="fade" transition-hide="fade">
+      <div class="fit bg-black flex flex-center" style="position: relative">
+        <video
+          controls
+          autoplay
+          class="fullscreen-video-player"
+          @click.stop>
+          <source :src="videoSrc(fullscreenMedia)" :type="videoMimeType(fullscreenMedia)" />
+        </video>
+        <q-btn
+          icon="close"
+          flat round
+          color="white"
+          size="md"
+          class="absolute-top-right q-ma-md"
+          style="z-index: 1"
+          @click="showFullscreen = false">
+          <q-tooltip>关闭全屏</q-tooltip>
+        </q-btn>
+      </div>
     </q-dialog>
   </q-item>
 </template>
@@ -198,6 +282,26 @@ function confirmDelete() {
   display: block;
   max-width: 100%;
   height: auto;
+}
+
+/* Hide native fullscreen button – Wails WebView does not support
+   the HTML5 Fullscreen API correctly for embedded <video>. */
+video::-webkit-media-controls-fullscreen-button {
+  display: none;
+}
+
+.video-fullscreen-btn {
+  position: absolute;
+  right: 4px;
+  bottom: 36px;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1;
+}
+
+.fullscreen-video-player {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
 }
 
 .thumbnail-preview {
