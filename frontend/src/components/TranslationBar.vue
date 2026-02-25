@@ -13,14 +13,17 @@ const loading = ref(false)
 // Languages
 const languages = [
   { label: '自动识别', value: 'auto' },
-  { label: '简体中文', value: 'zh' },
-  { label: '英语', value: 'en' },
-  { label: '日语', value: 'ja' },
-  { label: '韩语', value: 'ko' },
-  { label: '法语', value: 'fr' },
-  { label: '西班牙语', value: 'es' },
-  { label: '德语', value: 'de' },
-  { label: '俄语', value: 'ru' },
+  { label: '中文', value: 'zh' },
+  { label: 'English', value: 'en' },
+  { label: '日本語', value: 'ja' },
+  { label: '한국어', value: 'ko' },
+  { label: 'Français', value: 'fr' },
+  { label: 'Español', value: 'es' },
+  { label: 'Deutsch', value: 'de' },
+  { label: 'Русский', value: 'ru' },
+  { label: 'Português', value: 'pt' },
+  { label: 'Italiano', value: 'it' },
+  { label: 'Türkçe', value: 'tr' },
 ]
 
 const sourceLang = ref('zh')
@@ -99,51 +102,44 @@ function clearInput() {
 </script>
 
 <template>
-  <div class="translator-entry-wrap q-pa-md">
+  <div class="translator-entry-wrap q-pa-sm">
     <q-slide-transition>
       <div v-show="showTranslatorPanel" class="translator-panel q-mb-sm">
-        <div class="row items-center justify-between q-mb-xs">
-          <div class="row items-center no-wrap col-grow">
-            <q-select
-              v-model="sourceLang"
-              :options="languages"
-              dense
-              borderless
-              options-dense
-              emit-value
-              map-options
-              class="col text-caption lang-select"
-              popup-content-class="text-caption lang-menu-popup" />
-            <q-btn flat round dense icon="swap_horiz" size="sm" color="grey-7" @click="swapLanguages" />
-            <q-select
-              v-model="targetLang"
-              :options="languages"
-              dense
-              borderless
-              options-dense
-              emit-value
-              map-options
-              class="col text-caption lang-select target-lang-select"
-              popup-content-class="text-caption lang-menu-popup" />
-          </div>
-          <q-btn
-            flat
-            round
+        <div class="row items-center q-mb-sm translator-header">
+          <div class="text-subtitle1 text-weight-bold translator-title">Translator</div>
+          <q-space />
+          <q-btn flat round dense icon="close" color="grey-6" @click="showTranslatorPanel = false" />
+        </div>
+
+        <div class="row items-center no-wrap q-mb-sm lang-switch-wrap">
+          <q-select
+            v-model="sourceLang"
+            :options="languages"
+            emit-value
+            map-options
             dense
-            :icon="loading ? 'hourglass_empty' : 'translate'"
-            size="sm"
-            color="primary"
-            :loading="loading"
-            @click="doTranslate" />
+            borderless
+            options-dense
+            class="lang-select" />
+          <q-btn flat round dense icon="swap_horiz" size="sm" color="grey-6" class="q-mx-xs" @click="swapLanguages" />
+          <q-select
+            v-model="targetLang"
+            :options="languages"
+            emit-value
+            map-options
+            dense
+            borderless
+            options-dense
+            class="lang-select" />
         </div>
 
         <q-input
           v-model="sourceText"
-          dense
           outlined
-          placeholder="输入..."
+          type="textarea"
           autogrow
-          class="q-mb-xs"
+          placeholder="Enter Chinese text..."
+          class="q-mb-sm"
           bg-color="white"
           @keydown.enter="onKeyEnter"
           debounce="0"
@@ -153,30 +149,29 @@ function clearInput() {
           </template>
         </q-input>
 
-        <div
-          class="output-area q-pa-sm relative-position rounded-borders cursor-pointer"
-          :class="{ 'has-content': !!targetText }"
-          @click="copyResult"
-          v-ripple>
-          <div v-if="!targetText" class="text-grey-5 text-italic text-caption">翻译结果...</div>
-          <div v-else class="text-body2 output-content">{{ targetText }}</div>
+        <q-btn
+          unelevated
+          no-caps
+          class="translate-btn q-mb-sm"
+          :loading="loading"
+          label="Translate"
+          @click="doTranslate" />
 
-          <q-icon
-            v-if="targetText"
-            name="content_copy"
-            size="xs"
-            class="absolute-bottom-right q-ma-xs text-grey-6" />
+        <div class="output-area" :class="{ 'has-content': !!targetText }" @click="copyResult">
+          <div v-if="!targetText" class="text-grey-6">Translation will appear here...</div>
+          <div v-else class="output-text">{{ targetText }}</div>
         </div>
       </div>
     </q-slide-transition>
 
     <q-btn
+      v-if="!showTranslatorPanel"
       no-caps
       unelevated
       class="translator-entry-btn"
       icon="translate"
       label="Open Translator"
-      @click="showTranslatorPanel = !showTranslatorPanel" />
+      @click="showTranslatorPanel = true" />
   </div>
 </template>
 
@@ -188,80 +183,87 @@ function clearInput() {
 }
 
 .translator-entry-btn {
-  align-self: center;
-  background: #1f2735;
+  align-self: stretch;
+  background: #182136;
   color: #ffffff;
-  border-radius: 24px;
+  border-radius: 10px;
   min-height: 44px;
-  min-width: 220px;
-  padding: 0 20px;
-  box-shadow: 0 8px 20px rgba(20, 27, 39, 0.24);
+  width: 100%;
+  padding: 0 16px;
+  box-shadow: 0 4px 10px rgba(20, 27, 39, 0.18);
 }
 
 .translator-panel {
-  background: #ffffff;
+  background: #f7f8fc;
   border-radius: 12px;
-  border: 1px solid #e6eaf2;
-  box-shadow: 0 10px 24px rgba(19, 27, 39, 0.12);
+  border: 1px solid #e0e5ef;
+  box-shadow: 0 8px 18px rgba(21, 31, 47, 0.12);
   padding: 12px;
-  max-width: 720px;
   width: 100%;
-  align-self: center;
 }
 
-.output-content {
-  white-space: pre-wrap;
-  word-break: break-word;
-  min-height: 1.5em; /* Ensure consistent line height */
+.translator-header {
+  border-bottom: 1px solid #e4e9f2;
+  padding-bottom: 6px;
+}
+
+.translator-title {
+  color: #364156;
+}
+
+.lang-switch-wrap {
+  background: #f4f6fa;
+  border: 1px solid #d9dfeb;
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.lang-select {
+  flex: 1;
 }
 
 .lang-select :deep(.q-field__control) {
-  min-height: 24px;
+  min-height: 28px;
+  background: #ffffff;
+  border-radius: 6px;
+  border: 1px solid #e2e7f1;
+  padding: 0 6px;
 }
-.lang-select :deep(.q-field__native) {
-  padding-top: 0;
-  padding-bottom: 0;
-  font-size: 12px;
+
+.lang-select :deep(.q-field__native),
+.lang-select :deep(.q-field__input) {
+  color: #4b5568;
+  font-size: 13px;
+  padding: 0;
 }
-.target-lang-select :deep(.q-field__native) {
-  justify-content: flex-end;
-  text-align: right;
+
+.translate-btn {
+  width: 100%;
+  background: #8f87ea;
+  color: #ffffff;
+  border-radius: 8px;
+  min-height: 40px;
+  font-weight: 600;
 }
 
 .output-area {
-  min-height: 38px;
-  width: 100%; /* Prevent shrinking in flex container */
-  background: rgba(0, 0, 0, 0.03);
-  border: 1px dashed rgba(0, 0, 0, 0.1);
-  transition: all 0.2s;
+  min-height: 62px;
+  border: 1px dashed #c7ceda;
+  background: #fafbfe;
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
 }
 
 .output-area.has-content {
-  background: rgba(25, 118, 210, 0.05);
-  border: 1px solid rgba(25, 118, 210, 0.1);
+  border-style: solid;
+  border-color: #c8d2ea;
+  background: #f3f7ff;
 }
 
-.output-area:hover.has-content {
-  background: rgba(25, 118, 210, 0.1);
+.output-text {
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
-/* Fix dropdown text color visibility */
-.lang-select :deep(.q-field__native) {
-  padding-top: 0;
-  padding-bottom: 0;
-  font-size: 12px;
-  color: #1d1d1d; /* Force dark text for visibility against white bg */
-}
-
-</style>
-
-<!-- Global styles for popup -->
-<style>
-.lang-menu-popup .q-item {
-  color: #1d1d1d !important; /* Force visible text in dropdown */
-}
-.lang-menu-popup .q-item--active {
-  color: #1976d2 !important; /* Primary color for active */
-  font-weight: bold;
-}
 </style>
