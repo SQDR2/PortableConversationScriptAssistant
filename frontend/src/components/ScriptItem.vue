@@ -16,6 +16,9 @@ const showPreview = ref(false)
 const showFullscreen = ref(false)
 const fullscreenMedia = ref('')
 const mediaPort = ref(0)
+const copied = ref(false)
+let copiedTimer: ReturnType<typeof setTimeout> | null = null
+let contentClickTimer: ReturnType<typeof setTimeout> | null = null
 
 onMounted(async () => {
   document.addEventListener('fullscreenchange', handleNativeFullscreen)
@@ -36,18 +39,24 @@ const scriptImages = computed<string[]>(() => {
   }
 })
 
-const scriptTitle = computed(() => {
-  const firstLine = (props.script.content || '').split('\n').find(line => line.trim()) || ''
-  return firstLine.length > 48 ? `${firstLine.slice(0, 48)}...` : firstLine || 'Untitled Script'
-})
-
 const scriptPreview = computed(() => {
   const normalized = (props.script.content || '').replace(/\n+/g, '\n').trim()
-  if (!normalized) return ''
-  const withoutTitle = normalized.startsWith(scriptTitle.value)
-    ? normalized.slice(scriptTitle.value.length).trim()
-    : normalized
-  return withoutTitle || normalized
+  return normalized
+})
+
+const contentTypeIcons = computed<Array<{ name: string; className: string }>>(() => {
+  const media = scriptImages.value
+  const hasVideo = media.some(item => isVideo(item))
+  const hasImage = media.some(item => !isVideo(item))
+
+  if (!hasVideo && !hasImage) {
+    return [{ name: 'article', className: 'type-icon--text' }]
+  }
+
+  const icons: Array<{ name: string; className: string }> = []
+  if (hasImage) icons.push({ name: 'image', className: 'type-icon--image' })
+  if (hasVideo) icons.push({ name: 'videocam', className: 'type-icon--video' })
+  return icons
 })
 
 const VIDEO_EXTENSIONS = ['.mp4', '.webm']
@@ -112,16 +121,50 @@ function handleNativeFullscreen() {
 onUnmounted(() => {
   document.removeEventListener('fullscreenchange', handleNativeFullscreen)
   document.removeEventListener('webkitfullscreenchange', handleNativeFullscreen)
+  if (copiedTimer) {
+    clearTimeout(copiedTimer)
+    copiedTimer = null
+  }
+  if (contentClickTimer) {
+    clearTimeout(contentClickTimer)
+    contentClickTimer = null
+  }
 })
 
 async function copyContent() {
   try {
     await navigator.clipboard.writeText(props.script.content)
+    copied.value = true
+    if (copiedTimer) {
+      clearTimeout(copiedTimer)
+    }
+    copiedTimer = setTimeout(() => {
+      copied.value = false
+      copiedTimer = null
+    }, 1500)
     $q.notify({ type: 'positive', message: '已复制文本内容', timeout: 1000 })
   } catch (e) {
     console.error('Copy failed:', e)
     $q.notify({ type: 'negative', message: '复制失败' })
   }
+}
+
+function handleContentClick() {
+  if (contentClickTimer) {
+    clearTimeout(contentClickTimer)
+  }
+  contentClickTimer = setTimeout(() => {
+    copyContent()
+    contentClickTimer = null
+  }, 220)
+}
+
+function handleContentDblClick() {
+  if (contentClickTimer) {
+    clearTimeout(contentClickTimer)
+    contentClickTimer = null
+  }
+  showPreview.value = true
 }
 
 function confirmDelete() {
@@ -146,11 +189,45 @@ function confirmDelete() {
 
 <template>
   <q-item class="script-item q-mb-md q-pa-md relative-position">
-    <q-item-section class="text-left cursor-pointer" @click="showPreview = true">
+    <q-item-section class="text-left">
+      <div class="row items-center no-wrap script-toolbar">
+        <div class="col row items-center no-wrap q-gutter-xs script-type-icons">
+          <q-icon
+            v-for="icon in contentTypeIcons"
+            :key="icon.name"
+            :name="icon.name"
+            :class="icon.className"
+            size="16px" />
+        </div>
+        <div class="row items-center no-wrap q-gutter-xs script-inline-actions">
+          <q-btn flat round dense size="xs" icon="edit" color="grey-6" @click.stop="emit('edit', script)">
+            <q-tooltip>编辑</q-tooltip>
+          </q-btn>
+          <q-btn flat round dense size="xs" icon="delete" color="grey-6" @click.stop="confirmDelete">
+            <q-tooltip>删除</q-tooltip>
+          </q-btn>
+          <q-btn
+            flat
+            round
+            dense
+            size="xs"
+            :icon="copied ? 'check' : 'content_copy'"
+            :color="copied ? 'positive' : 'grey-6'"
+            @click.stop="copyContent">
+            <q-tooltip>{{ copied ? '已复制' : '复制' }}</q-tooltip>
+          </q-btn>
+        </div>
+      </div>
+
       <div class="row items-start no-wrap">
         <div class="col">
-          <q-item-label class="script-title" lines="1">{{ scriptTitle }}</q-item-label>
-          <q-item-label class="script-content q-mt-xs" lines="3">{{ scriptPreview }}</q-item-label>
+          <q-item-label
+            class="script-content q-mt-xs script-content-clickable"
+            lines="4"
+            @click="handleContentClick"
+            @dblclick="handleContentDblClick">
+            {{ scriptPreview }}
+          </q-item-label>
           <q-item-label caption class="row items-center q-mt-sm">
             <span class="text-grey-7">{{ new Date(script.created_at).toLocaleString() }}</span>
             <q-chip v-if="script.tags" size="sm" color="grey-2" text-color="grey-8" class="q-ml-sm">{{ script.tags }}</q-chip>
@@ -174,25 +251,6 @@ function confirmDelete() {
         </div>
       </div>
     </q-item-section>
-
-    <q-btn flat round dense icon="more_horiz" class="script-actions-trigger" @click.stop>
-      <q-menu anchor="bottom right" self="top right">
-        <q-list style="min-width: 120px">
-          <q-item clickable v-close-popup @click="copyContent">
-            <q-item-section avatar><q-icon name="content_copy" /></q-item-section>
-            <q-item-section>复制</q-item-section>
-          </q-item>
-          <q-item clickable v-close-popup @click="emit('edit', script)">
-            <q-item-section avatar><q-icon name="edit" /></q-item-section>
-            <q-item-section>编辑</q-item-section>
-          </q-item>
-          <q-item clickable v-close-popup @click="confirmDelete">
-            <q-item-section avatar><q-icon name="delete" color="negative" /></q-item-section>
-            <q-item-section>删除</q-item-section>
-          </q-item>
-        </q-list>
-      </q-menu>
-    </q-btn>
 
     <!-- Preview Dialog -->
     <q-dialog v-model="showPreview">
@@ -278,19 +336,30 @@ function confirmDelete() {
   transition: all 0.2s;
 
   &:hover {
+    border-color: var(--q-primary);
     box-shadow: 0 8px 20px rgba(26, 35, 52, 0.08);
-
-    .script-actions-trigger {
-      opacity: 1;
-    }
   }
 }
 
-.script-title {
-  font-size: 15px;
-  line-height: 1.3;
-  font-weight: 700;
-  color: #1f2532;
+.script-toolbar {
+  min-height: 18px;
+  margin-bottom: 2px;
+}
+
+.script-type-icons {
+  color: #7e889d;
+}
+
+.type-icon--text {
+  color: #5b8def;
+}
+
+.type-icon--image {
+  color: #f59f42;
+}
+
+.type-icon--video {
+  color: #a062f7;
 }
 
 .script-content {
@@ -301,17 +370,18 @@ function confirmDelete() {
   color: #5d6678;
 }
 
-.script-actions-trigger {
-  position: absolute;
-  right: 8px;
-  top: 8px;
-  color: #7a8395;
-  opacity: 0;
-  transition: opacity 0.18s ease;
+.script-inline-actions :deep(.q-btn) {
+  min-width: 20px;
+  min-height: 20px;
+  opacity: 0.65;
 }
 
-.script-item:focus-within .script-actions-trigger {
-  opacity: 1;
+.script-item:hover .script-inline-actions :deep(.q-btn) {
+  opacity: 0.9;
+}
+
+.script-content-clickable {
+  cursor: pointer;
 }
 
 .preserve-whitespace {
