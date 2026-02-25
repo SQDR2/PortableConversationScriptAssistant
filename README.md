@@ -55,6 +55,25 @@ Sidekick 是一款基于 Wails 构建的桌面辅助工具，旨在为日常办�
 wails build
 ```
 
+## Conductor 工作流
+
+本项目已完成 `conductor/` 初始化，可用于结构化需求落地（spec/plan/implement）。
+
+### Conductor 目录
+
+- `conductor/product.md`：产品目标与范围
+- `conductor/product-guidelines.md`：产品文案与体验约束
+- `conductor/tech-stack.md`：技术栈与架构约束
+- `conductor/workflow.md`：任务执行规范与质量门禁
+- `conductor/code_styleguides/`：语言级编码规范（Go/TypeScript/JavaScript/HTML-CSS）
+- `conductor/tracks.md` 与 `conductor/tracks/`：工作项索引与每个 track 的 spec/plan
+
+### 常见使用方式
+
+- 初始化后创建工作项：`create a new track for <feature-or-bug>`
+- 按计划推进实现：`conductor implement`
+- 查看当前进度：`check project status`
+
 ## 配置说明
 
 ### 翻译服务配置
