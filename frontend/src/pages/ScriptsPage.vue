@@ -100,11 +100,22 @@ async function loadData(showLoading = true) {
 // Editor State
 const showEditor = ref(false)
 const editingScript = ref<models.Script | null>(null)
-const editorContent = ref('')
+const editorBody = ref('')
 const editorTags = ref('')
 const editorCategoryId = ref<number | null>(null)
-const editorImages = ref<string[]>([])
-const uploadDummy = ref(null)
+type MediaAttachmentType = 'image' | 'video'
+interface MediaAttachmentRow {
+  type: MediaAttachmentType
+  url: string
+}
+const mediaAttachments = ref<MediaAttachmentRow[]>([])
+const mediaTypeOptions: { label: string; value: MediaAttachmentType }[] = [
+  { label: '图片', value: 'image' },
+  { label: '视频', value: 'video' },
+]
+const MAX_MEDIA_ATTACHMENTS = 10
+const imageInputRef = ref<HTMLInputElement | null>(null)
+const imageUploadTargetIndex = ref<number | null>(null)
 
 const VIDEO_EXTENSIONS = ['.mp4', '.webm']
 function isVideo(path: string): boolean {
@@ -112,16 +123,53 @@ function isVideo(path: string): boolean {
   return VIDEO_EXTENSIONS.some(ext => lower.endsWith(ext))
 }
 
+function mediaTypeFromUrl(url: string): MediaAttachmentType {
+  return isVideo(url) ? 'video' : 'image'
+}
+
+function normalizeMediaAttachments(rows: MediaAttachmentRow[]): string[] {
+  return rows
+    .map(row => row.url.trim())
+    .filter(url => !!url)
+}
+
+function addMediaAttachment() {
+  if (mediaAttachments.value.length >= MAX_MEDIA_ATTACHMENTS) {
+    $q.notify({ type: 'warning', message: `最多添加 ${MAX_MEDIA_ATTACHMENTS} 个媒体附件` })
+    return
+  }
+  mediaAttachments.value.push({ type: 'image', url: '' })
+}
+
+function removeMediaAttachment(index: number) {
+  mediaAttachments.value.splice(index, 1)
+}
+
+function updateMediaType(index: number, type: MediaAttachmentType | null) {
+  const nextType = type || 'image'
+  const item = mediaAttachments.value[index]
+  if (!item) return
+  if (item.type !== nextType) {
+    item.type = nextType
+    item.url = ''
+    return
+  }
+  item.type = nextType
+}
+
 function openEditor(script?: models.Script) {
   if (script) {
     editingScript.value = script
-    editorContent.value = script.content
+    editorBody.value = script.content || ''
     editorTags.value = script.tags
     editorCategoryId.value = script.category_id || null
-    editorImages.value = script.images ? JSON.parse(script.images) : []
+    mediaAttachments.value = (script.images ? JSON.parse(script.images) : []).map((url: string) => ({
+      type: mediaTypeFromUrl(url),
+      url,
+    }))
   } else {
     editingScript.value = null
-    editorContent.value = ''
+    editorBody.value = ''
     editorTags.value = ''
     // Default category: current directory if in directory view
     if (currentView.value === 'directory' && directoryPath.value) {
@@ -129,9 +177,8 @@ function openEditor(script?: models.Script) {
     } else {
       editorCategoryId.value = null
     }
-    editorImages.value = []
+    mediaAttachments.value = [{ type: 'image', url: '' }]
   }
-  uploadDummy.value = null
   showEditor.value = true
 }
 
@@ -147,67 +194,105 @@ watch(
   { immediate: true },
 )
 
-async function handleFileUpload(file: File) {
-  if (!file) return
-  const reader = new FileReader()
-  reader.onload = async () => {
-    const base64 = (reader.result as string).split(',')[1]
-    const ext = file.name.substring(file.name.lastIndexOf('.'))
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = String(reader.result || '')
+      const base64 = result.split(',')[1]
+      if (!base64) {
+        reject(new Error('invalid base64 content'))
+        return
+      }
+      resolve(base64)
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+async function onImageFileSelected(event: Event) {
+  const index = imageUploadTargetIndex.value
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file || index === null) {
+    imageUploadTargetIndex.value = null
+    if (input) input.value = ''
+    return
+  }
+
+  try {
+    const base64 = await fileToBase64(file)
+    const ext = file.name.substring(file.name.lastIndexOf('.')) || '.png'
+    // @ts-ignore
+    const path = await ScriptService.SaveScriptImage(base64, ext)
+    mediaAttachments.value[index].url = path
+  } catch (e) {
+    console.error(e)
+    $q.notify({ type: 'negative', message: '图片上传失败' })
+  } finally {
+    imageUploadTargetIndex.value = null
+    if (input) input.value = ''
+  }
+}
+
+async function handleMediaUpload(index: number) {
+  const row = mediaAttachments.value[index]
+  if (!row) return
+
+  if (row.type === 'video') {
     try {
       // @ts-ignore
-      const path = await ScriptService.SaveScriptImage(base64, ext)
-      editorImages.value.push(path)
-    } catch (e) {
-      console.error(e)
-      $q.notify({ type: 'negative', message: '图片上传失败' })
-    } finally {
-      // Reset file input so the same (or any) file can be selected again
-      uploadDummy.value = null
+      const path = await ScriptService.SelectAndSaveMedia()
+      if (path) {
+        mediaAttachments.value[index].url = path
+      }
+    } catch (e: any) {
+      const msg = String(e)
+      if (!msg.includes('no file selected')) {
+        console.error(e)
+        $q.notify({ type: 'negative', message: msg || '视频上传失败' })
+      }
     }
+    return
   }
-  reader.readAsDataURL(file)
+
+  imageUploadTargetIndex.value = index
+  imageInputRef.value?.click()
 }
 
-function removeImage(index: number) {
-  editorImages.value.splice(index, 1)
-}
-
-async function handleVideoUpload() {
-  try {
-    // @ts-ignore
-    const path = await ScriptService.SelectAndSaveMedia()
-    if (path) {
-      editorImages.value.push(path)
-    }
-  } catch (e: any) {
-    const msg = String(e)
-    // "no file selected" is not an error, user just cancelled
-    if (!msg.includes('no file selected')) {
-      console.error(e)
-      $q.notify({ type: 'negative', message: msg || '视频上传失败' })
-    }
-  }
+function removeEmptyMediaRows() {
+  mediaAttachments.value = mediaAttachments.value.filter(item => item.url.trim())
 }
 
 async function saveScript() {
   try {
+    removeEmptyMediaRows()
+    const images = normalizeMediaAttachments(mediaAttachments.value)
+    const content = editorBody.value.trim()
+
+    if (!content) {
+      $q.notify({ type: 'warning', message: '文本内容不能为空' })
+      return
+    }
+
     if (editingScript.value) {
       // @ts-ignore
       await ScriptService.UpdateScript(
         editingScript.value.id,
-        editorContent.value,
+        content,
         editorTags.value,
         editorCategoryId.value,
-        JSON.stringify(editorImages.value),
+        JSON.stringify(images),
       )
       $q.notify({ type: 'positive', message: '话术已更新' })
     } else {
       // @ts-ignore
       await ScriptService.CreateScript(
-        editorContent.value,
+        content,
         editorTags.value,
         editorCategoryId.value,
-        JSON.stringify(editorImages.value),
+        JSON.stringify(images),
       )
       $q.notify({ type: 'positive', message: '话术已创建' })
     }
@@ -370,90 +455,86 @@ function tweakPageHeight(offset: number) {
 
     <!-- Editor Dialog -->
     <q-dialog v-model="showEditor" persistent>
-      <q-card class="script-dialog-card" style="min-width: 300px">
-        <q-card-section>
+      <q-card class="script-dialog-card script-editor-dialog">
+        <q-card-section class="row items-center editor-header">
           <div class="text-h6">{{ editingScript ? '编辑话术' : '新建话术' }}</div>
+          <q-space />
+          <q-btn flat round dense icon="close" color="grey-6" v-close-popup />
         </q-card-section>
 
-        <q-card-section class="q-pt-none">
+        <q-card-section class="editor-body">
+          <div class="editor-field-label">所属目录</div>
           <q-select
             v-model="editorCategoryId"
             :options="categoryOptions"
-            label="所属目录"
             dense
             outlined
             emit-value
             map-options
             popup-content-class="script-dialog-card"
             class="q-mb-md" />
+
+          <div class="editor-field-label">文本内容</div>
           <q-input
-            v-model="editorContent"
+            v-model="editorBody"
             type="textarea"
-            label="内容"
-            filled
+            outlined
             autogrow
             autofocus
-            style="max-height: 200px; overflow-y: auto" />
-          <q-input v-model="editorTags" label="标签 (逗号分隔)" class="q-mt-md" outlined dense />
+            placeholder="请输入话术内容..."
+            class="q-mb-md"
+            style="max-height: 240px; overflow-y: auto" />
 
-          <!-- Media Attachments (Images + Videos) -->
-          <div class="q-mt-lg">
-            <div class="row items-center q-mb-sm">
-              <span class="text-subtitle2 text-grey-8">媒体附件</span>
-              <q-space />
-              <span class="text-caption text-grey-6">{{ editorImages.length }} / 10</span>
-            </div>
-            <div class="row q-gutter-md">
-              <div v-for="(media, index) in editorImages" :key="index" class="relative-position">
-                <!-- Video thumbnail -->
-                <div v-if="isVideo(media)" class="rounded-borders shadow-1 border-grey flex flex-center bg-grey-3" style="width: 70px; height: 70px">
-                  <q-icon name="play_circle" color="primary" size="md" />
-                </div>
-                <!-- Image thumbnail -->
-                <q-img v-else :src="media" style="width: 70px; height: 70px" class="rounded-borders shadow-1 border-grey" />
-                <q-btn
-                  round
-                  dense
-                  color="negative"
-                  icon="close"
-                  size="xs"
-                  class="absolute-top-right"
-                  style="top: -8px; right: -8px; z-index: 10"
-                  @click="removeImage(index)" />
+          <div class="row items-center q-mb-sm">
+            <div class="editor-field-label q-mb-none">媒体附件</div>
+            <q-space />
+            <q-btn
+              flat
+              no-caps
+              color="primary"
+              icon="add"
+              label="添加媒体"
+              :disable="mediaAttachments.length >= MAX_MEDIA_ATTACHMENTS"
+              @click="addMediaAttachment" />
+          </div>
+
+          <div class="q-gutter-y-sm">
+            <div v-for="(media, index) in mediaAttachments" :key="`media-${index}`" class="media-row">
+              <q-select
+                :model-value="media.type"
+                :options="mediaTypeOptions"
+                emit-value
+                map-options
+                outlined
+                dense
+                class="media-type-select"
+                @update:model-value="value => updateMediaType(index, value as MediaAttachmentType)" />
+              <q-btn
+                unelevated
+                color="primary"
+                text-color="white"
+                no-caps
+                :label="media.url ? '重新上传' : '上传'"
+                class="media-upload-btn"
+                @click="handleMediaUpload(index)" />
+              <div class="media-status" :class="{ 'media-status--uploaded': !!media.url }">
+                {{ media.url ? '已上传' : '未上传' }}
               </div>
-              <!-- Upload buttons -->
-              <template v-if="editorImages.length < 10">
-                <q-file
-                  v-model="uploadDummy"
-                  borderless
-                  dense
-                  accept="image/*"
-                  display-value=""
-                  @update:model-value="handleFileUpload"
-                  style="width: 70px; height: 70px"
-                  class="bg-grey-2 rounded-borders overflow-hidden upload-box">
-                  <template v-slot:default>
-                    <div class="full-width full-height flex flex-center column">
-                      <q-icon name="add_a_photo" color="grey-6" size="sm" />
-                      <span class="text-caption text-grey-6" style="font-size: 10px">图片</span>
-                    </div>
-                  </template>
-                </q-file>
-                <div
-                  class="bg-grey-2 rounded-borders overflow-hidden upload-box flex flex-center column cursor-pointer"
-                  style="width: 70px; height: 70px"
-                  @click="handleVideoUpload">
-                  <q-icon name="videocam" color="grey-6" size="sm" />
-                  <span class="text-caption text-grey-6" style="font-size: 10px">视频</span>
-                </div>
-              </template>
+              <q-btn
+                flat
+                round
+                dense
+                color="negative"
+                icon="delete"
+                class="media-delete-btn"
+                @click="removeMediaAttachment(index)" />
             </div>
           </div>
         </q-card-section>
 
-        <q-card-actions align="right">
-          <q-btn flat label="取消" color="primary" v-close-popup />
-          <q-btn label="保存" color="primary" @click="saveScript" />
+        <q-card-actions align="right" class="editor-footer">
+          <q-btn flat no-caps label="取消" color="grey-8" v-close-popup />
+          <q-btn unelevated no-caps color="primary" icon="save" label="保存话术" @click="saveScript" />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -481,6 +562,7 @@ function tweakPageHeight(offset: number) {
       </q-card>
     </q-dialog>
     <input type="file" ref="fileInput" style="display: none" @change="onFileSelected" accept=".txt" />
+    <input type="file" ref="imageInputRef" style="display: none" accept="image/*" @change="onImageFileSelected" />
   </q-page>
 </template>
 
@@ -515,6 +597,93 @@ function tweakPageHeight(offset: number) {
   color: rgba(0, 0, 0, 0.87);
   .q-field__label {
     color: rgba(0, 0, 0, 0.6);
+  }
+}
+
+.script-editor-dialog {
+  width: 560px;
+  max-width: calc(100vw - 20px);
+  border-radius: 12px;
+}
+
+.editor-header {
+  border-bottom: 1px solid #eceff4;
+}
+
+.editor-body {
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 14px 16px;
+}
+
+.editor-field-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #3b4558;
+  margin-bottom: 8px;
+}
+
+.media-row {
+  display: grid;
+  grid-template-columns: 88px 96px 48px 30px;
+  align-items: center;
+  column-gap: 8px;
+  padding: 8px;
+  border: 1px solid #e6ebf4;
+  border-radius: 8px;
+  background: #fbfcff;
+}
+
+.media-type-select {
+  min-width: 0;
+}
+
+.media-upload-btn {
+  min-width: 96px;
+  height: 36px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+.media-status {
+  text-align: center;
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 600;
+  color: #8a94a8;
+  background: #eef1f6;
+  border-radius: 10px;
+  padding: 4px 0;
+}
+
+.media-status--uploaded {
+  color: #1e8e3e;
+  background: #eaf7ee;
+}
+
+.media-delete-btn {
+  justify-self: center;
+  background: #fff1f1;
+}
+
+.editor-footer {
+  border-top: 1px solid #eceff4;
+  padding: 12px 16px;
+}
+
+@media (max-width: 480px) {
+  .media-row {
+    grid-template-columns: 84px 92px 44px 28px;
+    column-gap: 6px;
+  }
+
+  .media-upload-btn {
+    min-width: 92px;
+    height: 34px;
+  }
+
+  .media-status {
+    font-size: 11px;
   }
 }
 
