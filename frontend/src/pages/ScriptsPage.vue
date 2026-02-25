@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import * as ScriptService from '../../wailsjs/go/services/ScriptService'
 import * as CategoryService from '../../wailsjs/go/services/CategoryService'
 import { models } from '../../wailsjs/go/models'
@@ -8,6 +9,8 @@ import CategoryList from '../components/CategoryList.vue'
 import ScriptItem from '../components/ScriptItem.vue'
 
 const $q = useQuasar()
+const route = useRoute()
+const router = useRouter()
 
 // Data State
 const scripts = ref<models.Script[]>([])
@@ -131,6 +134,18 @@ function openEditor(script?: models.Script) {
   uploadDummy.value = null
   showEditor.value = true
 }
+
+watch(
+  () => route.query.new,
+  newToken => {
+    if (!newToken) return
+    openEditor()
+    const query = { ...route.query }
+    delete query.new
+    router.replace({ path: route.path, query })
+  },
+  { immediate: true },
+)
 
 async function handleFileUpload(file: File) {
   if (!file) return
@@ -262,32 +277,38 @@ function tweakPageHeight(offset: number) {
 
 <template>
   <q-page :style-fn="tweakPageHeight" class="q-pa-md column no-wrap" style="overflow: hidden">
-    <!-- Header: Search & Actions -->
-    <div class="row q-mb-sm items-center q-gutter-sm">
-      <q-input dense outlined v-model="searchText" placeholder="搜索..." class="col" debounce="300">
+    <!-- Header: Search -->
+    <div class="row q-mb-md items-center">
+      <q-input
+        dense
+        outlined
+        v-model="searchText"
+        placeholder="Search scripts..."
+        class="col search-box"
+        debounce="300"
+        bg-color="white">
         <template v-slot:append>
           <q-icon name="search" />
         </template>
       </q-input>
-      <q-btn color="primary" icon="add" round dense size="sm" @click="openEditor()">
-        <q-tooltip>新建话术</q-tooltip>
-      </q-btn>
     </div>
 
     <!-- View Switcher -->
-    <div class="row q-mb-sm">
-      <q-btn-group unelevated class="full-width">
+    <div class="row q-mb-md">
+      <q-btn-group unelevated class="full-width view-switcher">
         <q-btn
-          :color="currentView === 'timeline' ? 'primary' : 'grey-3'"
-          :text-color="currentView === 'timeline' ? 'white' : 'black'"
-          label="时间轴"
+          :class="['col switch-btn', { 'switch-btn--active': currentView === 'timeline' }]"
+          flat
+          no-caps
+          label="Timeline"
           class="col"
           size="sm"
           @click="currentView = 'timeline'" />
         <q-btn
-          :color="currentView === 'directory' ? 'primary' : 'grey-3'"
-          :text-color="currentView === 'directory' ? 'white' : 'black'"
-          label="目录视图"
+          :class="['col switch-btn', { 'switch-btn--active': currentView === 'directory' }]"
+          flat
+          no-caps
+          label="By Category"
           class="col"
           size="sm"
           @click="
@@ -464,6 +485,32 @@ function tweakPageHeight(offset: number) {
 </template>
 
 <style lang="scss">
+.search-box {
+  :deep(.q-field__control) {
+    border-radius: 12px;
+    background: #eff2f7;
+    border-color: #eff2f7;
+  }
+}
+
+.view-switcher {
+  border-radius: 14px;
+  padding: 4px;
+  background: #eceff5;
+}
+
+.switch-btn {
+  border-radius: 12px;
+  color: #596275;
+  font-weight: 600;
+}
+
+.switch-btn--active {
+  background: #ffffff;
+  color: #1f2735;
+  box-shadow: 0 2px 6px rgba(27, 39, 61, 0.12);
+}
+
 .script-dialog-card {
   color: rgba(0, 0, 0, 0.87);
   .q-field__label {

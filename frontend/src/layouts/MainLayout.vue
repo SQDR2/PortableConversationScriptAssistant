@@ -1,24 +1,24 @@
 <script setup lang="ts">
-import { ref, inject, computed, type Ref, onMounted } from 'vue'
+import { ref, inject, type Ref, onMounted, computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { utils } from '../../wailsjs/go/models'
 import TranslationBar from '../components/TranslationBar.vue'
 import ConfigDialog from '../components/ConfigDialog.vue'
 import { GetConfigStatus } from '../../wailsjs/go/services/TranslationService'
 import { GetVersion } from '../../wailsjs/go/main/App'
 
-const leftDrawerOpen = ref(false)
+const router = useRouter()
+const route = useRoute()
 
 const selectedTarget = inject<Ref<utils.WindowInfo | null>>('selectedTarget', ref(null))
-
-const targetTitle = computed(() => selectedTarget.value?.title || '未关联应用')
-const targetProcess = computed(() => selectedTarget.value?.process || '')
-const targetHandle = computed(() => selectedTarget.value?.handle || '')
+const appName = 'Script Assistant'
+const headerTitle = computed(() => selectedTarget.value?.title?.trim() || appName)
 
 const emit = defineEmits(['open-target-dialog'])
-const showTranslation = ref(true)
 const configDialogOpen = ref(false)
 const isConfigForced = ref(false)
 const appVersion = ref('v1.0.0')
+const settingsDialogOpen = ref(false)
 
 onMounted(async () => {
   try {
@@ -39,201 +39,138 @@ onMounted(async () => {
 })
 
 function openConfigDialog() {
+  settingsDialogOpen.value = false
   isConfigForced.value = false
   configDialogOpen.value = true
 }
 
-function toggleTranslation() {
-  showTranslation.value = !showTranslation.value
+function openTargetDialog() {
+  settingsDialogOpen.value = false
+  emit('open-target-dialog')
 }
 
-function toggleLeftDrawer() {
-  leftDrawerOpen.value = !leftDrawerOpen.value
+function openSettingsDialog() {
+  settingsDialogOpen.value = true
+}
+
+function openCreateScript() {
+  const query = { ...route.query, new: String(Date.now()) }
+  router.replace({ path: '/', query })
 }
 </script>
 
 <template>
-  <q-layout view="lHh Lpr lFf" class="glass-layout">
-    <q-header elevated class="glass-header">
-      <q-toolbar>
-        <q-btn flat dense round icon="menu" aria-label="菜单" @click="toggleLeftDrawer" />
+  <q-layout view="lHh lpr lFf" class="app-layout">
+    <q-header class="app-header" bordered>
+      <q-toolbar class="header-toolbar">
+        <div class="row items-center no-wrap q-gutter-sm">
+          <q-icon name="chat_bubble_outline" size="20px" class="header-icon" />
+          <q-toolbar-title class="header-title">{{ headerTitle }}</q-toolbar-title>
+        </div>
 
-        <q-toolbar-title> Sidekick 话术助手 </q-toolbar-title>
+        <q-space />
 
-        <q-btn
-          dense
-          flat
-          round
-          icon="translate"
-          @click="toggleTranslation"
-          :color="showTranslation ? 'primary' : 'grey'">
-          <q-tooltip>切换翻译栏</q-tooltip>
+        <q-btn dense flat round icon="add" class="header-action" @click="openCreateScript">
+          <q-tooltip>添加话术</q-tooltip>
         </q-btn>
-        <div class="q-ml-sm">{{ appVersion }}</div>
+        <q-btn dense flat round icon="settings" class="header-action" @click="openSettingsDialog">
+          <q-tooltip>设置</q-tooltip>
+        </q-btn>
+
+        <div class="header-version q-ml-sm">{{ appVersion }}</div>
       </q-toolbar>
     </q-header>
-
-    <q-drawer v-model="leftDrawerOpen" show-if-above bordered class="glass-drawer">
-      <q-list class="drawer-list">
-        <q-item-label header class="drawer-header">Sidekick</q-item-label>
-
-        <q-item class="drawer-card">
-          <q-item-section avatar>
-            <q-avatar color="primary" text-color="white" icon="link" />
-          </q-item-section>
-          <q-item-section class="drawer-card__content">
-            <div class="drawer-card__title">
-              <span>当前关联</span>
-              <q-btn dense flat color="primary" label="更换" @click="emit('open-target-dialog')" />
-            </div>
-            <q-item-label class="drawer-card__name" lines="1">{{ targetTitle }}</q-item-label>
-            <q-item-label caption lines="1" v-if="targetProcess">{{ targetProcess }}</q-item-label>
-            <q-item-label caption lines="1" v-if="targetHandle">句柄: {{ targetHandle }}</q-item-label>
-          </q-item-section>
-        </q-item>
-
-        <q-item clickable to="/" class="drawer-item">
-          <q-item-section avatar>
-            <q-icon name="assignment" />
-          </q-item-section>
-          <q-item-section>
-            <q-item-label>话术管理</q-item-label>
-          </q-item-section>
-        </q-item>
-
-        <q-item clickable @click="openConfigDialog" class="drawer-item">
-          <q-item-section avatar>
-            <q-icon name="settings" />
-          </q-item-section>
-          <q-item-section>
-            <q-item-label>翻译配置</q-item-label>
-            <q-item-label caption>设置腾讯云 API 密钥</q-item-label>
-          </q-item-section>
-        </q-item>
-
-        <q-item clickable @click="emit('open-target-dialog')" class="drawer-item">
-          <q-item-section avatar>
-            <q-icon name="gps_fixed" />
-          </q-item-section>
-          <q-item-section>
-            <q-item-label>选择目标</q-item-label>
-            <q-item-label caption>关联目标应用程序</q-item-label>
-          </q-item-section>
-        </q-item>
-      </q-list>
-    </q-drawer>
 
     <q-page-container>
       <router-view />
     </q-page-container>
 
-    <q-footer v-if="showTranslation" elevated class="glass-footer">
+    <q-footer class="translator-entry-footer">
       <TranslationBar />
     </q-footer>
+
+    <q-dialog v-model="settingsDialogOpen">
+      <q-card class="settings-dialog-card" style="width: 360px; max-width: 92vw">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-subtitle1 text-weight-bold">设置</div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+
+        <q-card-section>
+          <q-list bordered separator class="rounded-borders">
+            <q-item clickable v-ripple @click="openTargetDialog">
+              <q-item-section avatar><q-icon name="link" /></q-item-section>
+              <q-item-section>
+                <q-item-label>{{ selectedTarget ? '切换关联应用' : '关联应用' }}</q-item-label>
+                <q-item-label caption>{{ selectedTarget?.title ? `当前：${selectedTarget.title}` : '选择需要跟随的目标窗口' }}</q-item-label>
+              </q-item-section>
+            </q-item>
+
+            <q-item clickable v-ripple @click="openConfigDialog">
+              <q-item-section avatar><q-icon name="vpn_key" /></q-item-section>
+              <q-item-section>
+                <q-item-label>腾讯翻译配置</q-item-label>
+                <q-item-label caption>设置 SecretId 与 SecretKey</q-item-label>
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
 
     <ConfigDialog v-model="configDialogOpen" :forced="isConfigForced" />
   </q-layout>
 </template>
 
 <style lang="scss">
-.glass-layout {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
+.app-layout {
+  background: #f6f7fb;
 }
 
-.glass-header {
-  background: rgba(25, 118, 210, 0.8) !important;
-  backdrop-filter: blur(5px);
+.app-header {
+  background: #f6f7fb;
+  border-bottom: 1px solid #e8eaf0;
 }
 
-.glass-drawer {
-  background: rgba(255, 255, 255, 0.9) !important;
-  backdrop-filter: blur(16px);
-  border-right: 1px solid rgba(0, 0, 0, 0.06);
-  color: black;
+.header-toolbar {
+  padding: 8px 12px;
 }
 
-.drawer-list {
-  padding: 12px 10px 16px;
+.header-icon {
+  color: #4b5565;
 }
 
-.drawer-header {
-  color: rgba(0, 0, 0, 0.55);
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  margin: 4px 6px 8px;
+.header-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #202733;
 }
 
-.drawer-card {
-  margin: 6px 6px 18px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, rgba(25, 118, 210, 0.08), rgba(25, 118, 210, 0.02));
-  border: 1px solid rgba(25, 118, 210, 0.15);
+.header-action {
+  color: #576074;
 }
 
-.drawer-card__content {
-  gap: 2px;
-}
-
-.drawer-card__title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.header-version {
+  color: #6f7787;
   font-size: 12px;
-  color: rgba(0, 0, 0, 0.55);
 }
 
-.drawer-card__name {
-  font-weight: 600;
-  margin-top: 2px;
-}
-
-.drawer-item {
-  margin: 6px 6px;
-  border-radius: 10px;
-}
-
-.drawer-item:hover {
-  background: rgba(25, 118, 210, 0.08);
+.settings-dialog-card {
+  border-radius: 12px;
 }
 
 body.body--dark {
-  .glass-layout {
-    background: rgba(0, 0, 0, 0.2);
-  }
-  .glass-drawer {
-    background: rgba(20, 20, 20, 0.9) !important;
-    border-right: 1px solid rgba(255, 255, 255, 0.08);
-    color: white;
-  }
-  .drawer-header {
-    color: rgba(255, 255, 255, 0.65);
-  }
-  .drawer-card__title {
-    color: rgba(255, 255, 255, 0.6);
-  }
-  .drawer-card {
-    background: linear-gradient(135deg, rgba(66, 165, 245, 0.18), rgba(66, 165, 245, 0.05));
-    border: 1px solid rgba(66, 165, 245, 0.2);
-  }
-  .drawer-item:hover {
-    background: rgba(66, 165, 245, 0.14);
+  .app-layout,
+  .app-header {
+    background: #f6f7fb;
   }
 }
 </style>
 
 <style scoped>
-.glass-footer {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border-top: 1px solid rgba(0, 0, 0, 0.1);
-  color: black;
-}
-
-body.body--dark .glass-footer {
-  background: rgba(30, 30, 30, 0.95);
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  color: white;
+.translator-entry-footer {
+  background: transparent;
+  border-top: none;
 }
 </style>

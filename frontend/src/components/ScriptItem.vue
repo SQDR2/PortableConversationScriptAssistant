@@ -36,6 +36,20 @@ const scriptImages = computed<string[]>(() => {
   }
 })
 
+const scriptTitle = computed(() => {
+  const firstLine = (props.script.content || '').split('\n').find(line => line.trim()) || ''
+  return firstLine.length > 48 ? `${firstLine.slice(0, 48)}...` : firstLine || 'Untitled Script'
+})
+
+const scriptPreview = computed(() => {
+  const normalized = (props.script.content || '').replace(/\n+/g, '\n').trim()
+  if (!normalized) return ''
+  const withoutTitle = normalized.startsWith(scriptTitle.value)
+    ? normalized.slice(scriptTitle.value.length).trim()
+    : normalized
+  return withoutTitle || normalized
+})
+
 const VIDEO_EXTENSIONS = ['.mp4', '.webm']
 function isVideo(path: string): boolean {
   const lower = path.toLowerCase()
@@ -131,45 +145,54 @@ function confirmDelete() {
 </script>
 
 <template>
-  <q-item class="script-item q-mb-sm">
+  <q-item class="script-item q-mb-md q-pa-md relative-position">
     <q-item-section class="text-left cursor-pointer" @click="showPreview = true">
       <div class="row items-start no-wrap">
         <div class="col">
-          <q-item-label class="script-content" lines="3">{{ script.content }}</q-item-label>
-          <q-item-label caption class="row items-center q-mt-xs">
+          <q-item-label class="script-title" lines="1">{{ scriptTitle }}</q-item-label>
+          <q-item-label class="script-content q-mt-xs" lines="3">{{ scriptPreview }}</q-item-label>
+          <q-item-label caption class="row items-center q-mt-sm">
             <span class="text-grey-7">{{ new Date(script.created_at).toLocaleString() }}</span>
-            <q-chip v-if="script.tags" size="xs" color="secondary" text-color="white" class="q-ml-sm">{{
-              script.tags
-            }}</q-chip>
+            <q-chip v-if="script.tags" size="sm" color="grey-2" text-color="grey-8" class="q-ml-sm">{{ script.tags }}</q-chip>
           </q-item-label>
         </div>
-        <div v-if="scriptImages.length > 0" class="q-ml-sm">
-          <!-- Video thumbnail: show play icon -->
-          <div v-if="isVideo(scriptImages[0])" class="rounded-borders thumbnail-preview flex flex-center bg-grey-3" style="width: 40px; height: 40px">
-            <q-icon name="play_circle" color="primary" size="sm" />
+        <div v-if="scriptImages.length > 0" class="q-ml-md">
+          <div
+            v-if="isVideo(scriptImages[0])"
+            class="rounded-borders thumbnail-preview flex flex-center bg-grey-3"
+            style="width: 60px; height: 60px">
+            <q-icon name="play_circle" color="primary" size="md" />
           </div>
-          <!-- Image thumbnail -->
-          <q-img v-else :src="scriptImages[0]" style="width: 40px; height: 40px" class="rounded-borders thumbnail-preview" />
+          <q-img
+            v-else
+            :src="scriptImages[0]"
+            style="width: 60px; height: 60px"
+            class="rounded-borders thumbnail-preview" />
           <div v-if="scriptImages.length > 1" class="text-right">
-            <q-badge color="orange" size="xs" floating>+{{ scriptImages.length - 1 }}</q-badge>
+            <q-badge color="grey-8" text-color="white" size="xs" floating>+{{ scriptImages.length - 1 }}</q-badge>
           </div>
         </div>
       </div>
     </q-item-section>
 
-    <q-item-section side>
-      <div class="row q-gutter-xs">
-        <q-btn flat round dense size="sm" icon="content_copy" color="primary" @click.stop="copyContent">
-          <q-tooltip>复制</q-tooltip>
-        </q-btn>
-        <q-btn flat round dense size="sm" icon="edit" color="grey-7" @click.stop="emit('edit', script)">
-          <q-tooltip>编辑</q-tooltip>
-        </q-btn>
-        <q-btn flat round dense size="sm" icon="delete" color="negative" @click.stop="confirmDelete">
-          <q-tooltip>删除</q-tooltip>
-        </q-btn>
-      </div>
-    </q-item-section>
+    <q-btn flat round dense icon="more_horiz" class="script-actions-trigger" @click.stop>
+      <q-menu anchor="bottom right" self="top right">
+        <q-list style="min-width: 120px">
+          <q-item clickable v-close-popup @click="copyContent">
+            <q-item-section avatar><q-icon name="content_copy" /></q-item-section>
+            <q-item-section>复制</q-item-section>
+          </q-item>
+          <q-item clickable v-close-popup @click="emit('edit', script)">
+            <q-item-section avatar><q-icon name="edit" /></q-item-section>
+            <q-item-section>编辑</q-item-section>
+          </q-item>
+          <q-item clickable v-close-popup @click="confirmDelete">
+            <q-item-section avatar><q-icon name="delete" color="negative" /></q-item-section>
+            <q-item-section>删除</q-item-section>
+          </q-item>
+        </q-list>
+      </q-menu>
+    </q-btn>
 
     <!-- Preview Dialog -->
     <q-dialog v-model="showPreview">
@@ -249,14 +272,25 @@ function confirmDelete() {
 <style lang="scss">
 .script-item {
   background: #ffffff;
-  border-radius: 8px;
-  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: 10px;
+  border: 1px solid #e9ecf2;
+  box-shadow: 0 1px 3px rgba(18, 25, 38, 0.04);
   transition: all 0.2s;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.85);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 8px 20px rgba(26, 35, 52, 0.08);
+
+    .script-actions-trigger {
+      opacity: 1;
+    }
   }
+}
+
+.script-title {
+  font-size: 15px;
+  line-height: 1.3;
+  font-weight: 700;
+  color: #1f2532;
 }
 
 .script-content {
@@ -264,7 +298,20 @@ function confirmDelete() {
   word-break: break-all;
   font-size: 14px;
   line-height: 1.4;
-  color: #333;
+  color: #5d6678;
+}
+
+.script-actions-trigger {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  color: #7a8395;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.script-item:focus-within .script-actions-trigger {
+  opacity: 1;
 }
 
 .preserve-whitespace {
@@ -305,20 +352,7 @@ video::-webkit-media-controls-fullscreen-button {
 }
 
 .thumbnail-preview {
-  border: 1px solid rgba(0, 0, 0, 0.05);
-}
-
-body.body--dark {
-  .script-item {
-    background: rgba(255, 255, 255, 0.05);
-    border-color: rgba(255, 255, 255, 0.1);
-
-    &:hover {
-      background: rgba(255, 255, 255, 0.1);
-    }
-  }
-  .script-content {
-    color: #eee;
-  }
+  border-radius: 10px;
+  border: 1px solid #eaedf4;
 }
 </style>
