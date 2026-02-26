@@ -32,7 +32,7 @@ func (a *App) Greet(name string) string {
 func (a *App) GetVersion() string {
 	version, err := os.ReadFile("VERSION")
 	if err != nil {
-		return "v1.0.0" // 默认回退版本
+		return "v2.0.4" // 默认回退版本
 	}
 	return strings.TrimSpace(string(version))
 }
