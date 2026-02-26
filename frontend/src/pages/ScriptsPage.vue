@@ -414,7 +414,7 @@ function tweakPageHeight(offset: number) {
     </div>
 
     <!-- Main Content Area -->
-    <div class="col relative-position scroll" style="flex: 1; overflow-y: auto; overflow-x: hidden">
+    <div class="col relative-position scroll" style="flex: 1; overflow-y: auto; overflow-x: hidden; padding-right: 8px">
       <div>
         <!-- Directory View: Category List (Only at Root) -->
         <div v-if="currentView === 'directory' && !directoryPath && !searchText">
