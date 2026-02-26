@@ -190,8 +190,9 @@ function confirmDelete() {
 <template>
   <q-item class="script-item q-mb-md q-pa-md relative-position">
     <q-item-section class="text-left">
+      <!-- Title Row: type icons + tags as title + actions -->
       <div class="row items-center no-wrap script-toolbar">
-        <div class="col row items-center no-wrap q-gutter-xs script-type-icons">
+        <div class="row items-center no-wrap q-gutter-xs script-type-icons q-mr-xs">
           <q-icon
             v-for="icon in contentTypeIcons"
             :key="icon.name"
@@ -199,6 +200,10 @@ function confirmDelete() {
             :class="icon.className"
             size="16px" />
         </div>
+        <div v-if="script.tags" class="col script-title text-weight-medium ellipsis">
+          {{ script.tags }}
+        </div>
+        <div v-else class="col" />
         <div class="row items-center no-wrap q-gutter-xs script-inline-actions">
           <q-btn flat round dense size="xs" icon="edit" color="grey-6" @click.stop="emit('edit', script)">
             <q-tooltip>编辑</q-tooltip>
@@ -219,37 +224,57 @@ function confirmDelete() {
         </div>
       </div>
 
-      <div class="row items-start no-wrap">
-        <div class="col">
-          <q-item-label
-            class="script-content q-mt-xs script-content-clickable"
-            lines="4"
-            @click="handleContentClick"
-            @dblclick="handleContentDblClick">
-            {{ scriptPreview }}
-          </q-item-label>
-          <q-item-label caption class="row items-center q-mt-sm">
-            <span class="text-grey-7">{{ new Date(script.created_at).toLocaleString() }}</span>
-            <q-chip v-if="script.tags" size="sm" color="grey-2" text-color="grey-8" class="q-ml-sm">{{ script.tags }}</q-chip>
-          </q-item-label>
+      <!-- Content Text -->
+      <q-item-label
+        class="script-content q-mt-xs script-content-clickable"
+        lines="4"
+        @click="handleContentClick"
+        @dblclick="handleContentDblClick">
+        {{ scriptPreview }}
+      </q-item-label>
+
+      <!-- Inline Media (images grid + videos) -->
+      <div v-if="scriptImages.length > 0" class="script-media q-mt-sm">
+        <!-- Images grid -->
+        <div
+          v-if="scriptImages.filter(m => !isVideo(m)).length > 0"
+          :class="['script-media-images', scriptImages.filter(m => !isVideo(m)).length === 1 ? 'single' : 'grid']">
+          <img
+            v-for="(img, i) in scriptImages.filter(m => !isVideo(m))"
+            :key="'img-' + i"
+            :src="img"
+            class="script-media-img"
+            loading="lazy"
+            @click.stop="showPreview = true" />
         </div>
-        <div v-if="scriptImages.length > 0" class="q-ml-md">
-          <div
-            v-if="isVideo(scriptImages[0])"
-            class="rounded-borders thumbnail-preview flex flex-center bg-grey-3"
-            style="width: 60px; height: 60px">
-            <q-icon name="play_circle" color="primary" size="md" />
-          </div>
-          <q-img
-            v-else
-            :src="scriptImages[0]"
-            style="width: 60px; height: 60px"
-            class="rounded-borders thumbnail-preview" />
-          <div v-if="scriptImages.length > 1" class="text-right">
-            <q-badge color="grey-8" text-color="white" size="xs" floating>+{{ scriptImages.length - 1 }}</q-badge>
-          </div>
+        <!-- Videos -->
+        <div
+          v-for="(vid, i) in scriptImages.filter(m => isVideo(m))"
+          :key="'vid-' + i"
+          class="relative-position q-mt-xs">
+          <video
+            controls
+            controlslist="nofullscreen"
+            preload="metadata"
+            class="script-media-video">
+            <source :src="videoSrc(vid)" :type="videoMimeType(vid)" />
+          </video>
+          <q-btn
+            icon="fullscreen"
+            round flat
+            color="white"
+            size="sm"
+            class="video-fullscreen-btn"
+            @click.stop="openFullscreen(vid)">
+            <q-tooltip>全屏播放</q-tooltip>
+          </q-btn>
         </div>
       </div>
+
+      <!-- Timestamp -->
+      <q-item-label caption class="q-mt-sm">
+        <span class="text-grey-7">{{ new Date(script.created_at).toLocaleString() }}</span>
+      </q-item-label>
     </q-item-section>
 
     <!-- Preview Dialog -->
@@ -346,8 +371,15 @@ function confirmDelete() {
   margin-bottom: 2px;
 }
 
+.script-title {
+  font-size: 14px;
+  color: #2c3344;
+  min-width: 0;
+}
+
 .script-type-icons {
   color: #7e889d;
+  flex-shrink: 0;
 }
 
 .type-icon--text {
@@ -374,6 +406,7 @@ function confirmDelete() {
   min-width: 20px;
   min-height: 20px;
   opacity: 0.65;
+  flex-shrink: 0;
 }
 
 .script-item:hover .script-inline-actions :deep(.q-btn) {
@@ -384,6 +417,46 @@ function confirmDelete() {
   cursor: pointer;
 }
 
+/* ── Inline media area ── */
+.script-media {
+  width: 100%;
+  overflow: hidden;
+}
+
+.script-media-images {
+  &.single .script-media-img {
+    width: 100%;
+    max-height: 200px;
+    object-fit: cover;
+    border-radius: 8px;
+    display: block;
+    cursor: zoom-in;
+  }
+
+  &.grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+
+    .script-media-img {
+      width: 100%;
+      height: 120px;
+      object-fit: cover;
+      border-radius: 8px;
+      display: block;
+      cursor: zoom-in;
+    }
+  }
+}
+
+.script-media-video {
+  display: block;
+  width: 100%;
+  border-radius: 8px;
+  background: #000;
+}
+
+/* ── Dialog / fullscreen helpers ── */
 .preserve-whitespace {
   white-space: pre-wrap;
   word-break: break-all;
@@ -421,8 +494,17 @@ video::-webkit-media-controls-fullscreen-button {
   object-fit: contain;
 }
 
-.thumbnail-preview {
-  border-radius: 10px;
-  border: 1px solid #eaedf4;
+/* ── Dark mode ── */
+body.body--dark {
+  .script-item {
+    background: #1e2231;
+    border-color: #2e3448;
+  }
+  .script-title {
+    color: rgba(255, 255, 255, 0.9);
+  }
+  .script-content {
+    color: rgba(255, 255, 255, 0.65);
+  }
 }
 </style>
