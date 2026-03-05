@@ -336,74 +336,49 @@ function confirmDelete() {
       </q-item-label>
 
       <!-- Inline Media (images grid + videos) -->
-      <div v-if="scriptImages.length > 0" class="script-media q-mt-sm">
-        <!-- Images grid -->
-        <div
-          v-if="scriptImages.filter(m => !isVideo(m)).length > 0"
-          :class="['script-media-images', scriptImages.filter(m => !isVideo(m)).length === 1 ? 'single' : 'grid']">
-          <div
-            v-for="(img, i) in scriptImages.filter(m => !isVideo(m))"
-            :key="'img-' + i"
-            class="script-media-img-wrapper">
+      <div v-if="scriptImages.length > 0" class="script-media-strip q-mt-sm">
+        <template v-for="(media, i) in scriptImages" :key="'media-' + i">
+          <!-- Image thumbnail -->
+          <div v-if="!isVideo(media)" class="script-media-thumb-wrap">
             <img
-              :src="img"
-              class="script-media-img"
+              :src="media"
+              class="script-media-thumb"
               loading="lazy"
               @click.stop="showPreview = true" />
             <q-menu touch-position context-menu>
               <q-list dense style="min-width: 150px">
-                <q-item clickable v-close-popup @click.stop="copyImage(img)">
+                <q-item clickable v-close-popup @click.stop="copyImage(media)">
                   <q-item-section avatar><q-icon name="content_copy" size="sm" /></q-item-section>
                   <q-item-section>复制图片</q-item-section>
                 </q-item>
-                <q-item clickable v-close-popup @click.stop="revealInFolder(img)">
+                <q-item clickable v-close-popup @click.stop="revealInFolder(media)">
                   <q-item-section avatar><q-icon name="folder_open" size="sm" /></q-item-section>
                   <q-item-section>在文件夹中显示</q-item-section>
                 </q-item>
               </q-list>
             </q-menu>
           </div>
-        </div>
-        <!-- Videos -->
-        <div
-          v-for="(vid, i) in scriptImages.filter(m => isVideo(m))"
-          :key="'vid-' + i"
-          class="relative-position q-mt-xs">
-          <video
-            controls
-            controlslist="nofullscreen"
-            preload="metadata"
-            class="script-media-video"
-            @contextmenu.prevent>
-            <source :src="videoSrc(vid)" :type="videoMimeType(vid)" />
-          </video>
-          <q-btn
-            icon="fullscreen"
-            round flat
-            color="white"
-            size="sm"
-            class="video-fullscreen-btn"
-            @click.stop="openFullscreen(vid)">
-            <q-tooltip>全屏播放</q-tooltip>
-          </q-btn>
-          <q-btn
-            icon="folder_open"
-            round flat
-            color="white"
-            size="sm"
-            class="video-reveal-btn"
-            @click.stop="revealInFolder(vid)">
-            <q-tooltip>在文件夹中显示</q-tooltip>
-          </q-btn>
-          <q-menu touch-position context-menu>
-            <q-list dense style="min-width: 150px">
-              <q-item clickable v-close-popup @click.stop="revealInFolder(vid)">
-                <q-item-section avatar><q-icon name="folder_open" size="sm" /></q-item-section>
-                <q-item-section>在文件夹中显示</q-item-section>
-              </q-item>
-            </q-list>
-          </q-menu>
-        </div>
+          <!-- Video thumbnail -->
+          <div v-else class="script-media-thumb-wrap video-thumb" @click.stop="openFullscreen(media)">
+            <video
+              preload="metadata"
+              class="script-media-thumb"
+              @contextmenu.prevent>
+              <source :src="videoSrc(media)" :type="videoMimeType(media)" />
+            </video>
+            <div class="video-thumb-overlay">
+              <q-icon name="play_circle_outline" color="white" size="28px" />
+            </div>
+            <q-menu touch-position context-menu>
+              <q-list dense style="min-width: 150px">
+                <q-item clickable v-close-popup @click.stop="revealInFolder(media)">
+                  <q-item-section avatar><q-icon name="folder_open" size="sm" /></q-item-section>
+                  <q-item-section>在文件夹中显示</q-item-section>
+                </q-item>
+              </q-list>
+            </q-menu>
+          </div>
+        </template>
       </div>
 
       <!-- Timestamp -->
@@ -583,44 +558,46 @@ function confirmDelete() {
   cursor: pointer;
 }
 
-/* ── Inline media area ── */
-.script-media {
-  width: 100%;
+/* ── Inline media strip (horizontal thumbnail row) ── */
+.script-media-strip {
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}
+
+.script-media-thumb-wrap {
+  flex-shrink: 0;
+  width: 80px;
+  height: 60px;
+  border-radius: 6px;
   overflow: hidden;
-}
+  position: relative;
+  cursor: zoom-in;
 
-.script-media-images {
-  &.single .script-media-img {
-    width: 100%;
-    max-height: 72px;
-    object-fit: cover;
-    border-radius: 8px;
-    display: block;
-    cursor: zoom-in;
-  }
-
-  &.grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 6px;
-
-    .script-media-img {
-      width: 100%;
-      height: 52px;
-      object-fit: cover;
-      border-radius: 8px;
-      display: block;
-      cursor: zoom-in;
-    }
+  &.video-thumb {
+    cursor: pointer;
+    background: #000;
   }
 }
 
-.script-media-video {
-  display: block;
+.script-media-thumb {
   width: 100%;
-  max-height: 80px;
-  border-radius: 8px;
-  background: #000;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.video-thumb-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  pointer-events: none;
 }
 
 /* ── Dialog / fullscreen helpers ── */
@@ -661,11 +638,6 @@ video::-webkit-media-controls-fullscreen-button {
   bottom: 36px;
   background: rgba(0, 0, 0, 0.5);
   z-index: 1;
-}
-
-.script-media-img-wrapper {
-  display: block;
-  position: relative;
 }
 
 .fullscreen-video-player {
