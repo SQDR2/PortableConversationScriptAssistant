@@ -18,6 +18,10 @@ export function ListScripts(arg1, arg2) {
   return window['go']['services']['ScriptService']['ListScripts'](arg1, arg2);
 }
 
+export function RevealInFileManager(arg1) {
+  return window['go']['services']['ScriptService']['RevealInFileManager'](arg1);
+}
+
 export function SaveScriptImage(arg1, arg2) {
   return window['go']['services']['ScriptService']['SaveScriptImage'](arg1, arg2);
 }

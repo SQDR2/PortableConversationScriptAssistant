@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
+	goruntime "runtime"
 	"sidekick/backend/db"
 	"sidekick/backend/models"
 	"strings"
@@ -294,4 +296,47 @@ func (s *ScriptService) SelectAndSaveMedia() (string, error) {
 
 	// Return RELATIVE path for database
 	return filepath.Join("images", fileName), nil
+}
+
+// RevealInFileManager opens the system file manager and locates the given media file.
+// relativePath is a path like "images/uuid.mp4" relative to the working directory.
+func (s *ScriptService) RevealInFileManager(relativePath string) error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get working directory: %w", err)
+	}
+
+	absPath := filepath.Join(cwd, filepath.FromSlash(relativePath))
+
+	// Security: ensure path stays within cwd
+	rel, err := filepath.Rel(cwd, absPath)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		return fmt.Errorf("invalid path: access denied")
+	}
+
+	// Verify file exists
+	if _, statErr := os.Stat(absPath); os.IsNotExist(statErr) {
+		return fmt.Errorf("file not found")
+	}
+
+	var cmd *exec.Cmd
+	switch goruntime.GOOS {
+	case "darwin":
+		// open -R highlights the file in Finder
+		cmd = exec.Command("open", "-R", absPath)
+	case "windows":
+		// explorer /select, highlights the file in Explorer
+		cmd = exec.Command("explorer", "/select,"+absPath)
+	default:
+		// Linux: xdg-open the containing directory
+		dirPath := filepath.Dir(absPath)
+		cmd = exec.Command("xdg-open", dirPath)
+	}
+
+	if startErr := cmd.Start(); startErr != nil {
+		s.logErrorf("RevealInFileManager: failed to launch file manager: %v", startErr)
+		return fmt.Errorf("failed to open file manager: %w", startErr)
+	}
+
+	return nil
 }

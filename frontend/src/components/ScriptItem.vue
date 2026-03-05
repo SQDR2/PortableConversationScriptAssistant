@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { models } from '../../wailsjs/go/models'
 import { useQuasar } from 'quasar'
 import { Port } from '../../wailsjs/go/services/MediaServer'
+import { RevealInFileManager } from '../../wailsjs/go/services/ScriptService'
 import { WindowFullscreen, WindowUnfullscreen } from '../../wailsjs/runtime/runtime'
 
 const props = defineProps<{
@@ -167,6 +168,47 @@ function handleContentDblClick() {
   showPreview.value = true
 }
 
+async function copyImage(imgSrc: string) {
+  // 关键：ClipboardItem 必须在同步用户手势中构造（clipboard.write 需在点击回调的同步帧内调用）
+  // 将 blob 生成的 Promise 直接传给 ClipboardItem，WebKit 允许此模式
+  const blobPromise: Promise<Blob> = (async () => {
+    const imgEl = new Image()
+    await new Promise<void>((resolve, reject) => {
+      imgEl.onload = () => resolve()
+      imgEl.onerror = () => reject(new Error('图片加载失败'))
+      imgEl.src = imgSrc
+    })
+    const canvas = document.createElement('canvas')
+    canvas.width = imgEl.naturalWidth
+    canvas.height = imgEl.naturalHeight
+    const ctx = canvas.getContext('2d')
+    if (!ctx) throw new Error('canvas 2d context 不可用')
+    ctx.drawImage(imgEl, 0, 0)
+    const pngBlob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'))
+    if (!pngBlob) throw new Error('canvas toBlob 返回 null')
+    return pngBlob
+  })()
+
+  try {
+    // clipboard.write() 在此同步调用，维持用户手势上下文
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blobPromise })])
+    $q.notify({ type: 'positive', message: '图片已复制', timeout: 1000 })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error('Copy image failed:', e)
+    $q.notify({ type: 'negative', message: `复制失败：${msg}`, timeout: 4000 })
+  }
+}
+
+async function revealInFolder(path: string) {
+  try {
+    await RevealInFileManager(path)
+  } catch (e) {
+    console.error('Reveal in folder failed:', e)
+    $q.notify({ type: 'negative', message: '文件不存在或已被删除', timeout: 2000 })
+  }
+}
+
 function confirmDelete() {
   $q.dialog({
     title: '确认删除',
@@ -239,13 +281,28 @@ function confirmDelete() {
         <div
           v-if="scriptImages.filter(m => !isVideo(m)).length > 0"
           :class="['script-media-images', scriptImages.filter(m => !isVideo(m)).length === 1 ? 'single' : 'grid']">
-          <img
+          <div
             v-for="(img, i) in scriptImages.filter(m => !isVideo(m))"
             :key="'img-' + i"
-            :src="img"
-            class="script-media-img"
-            loading="lazy"
-            @click.stop="showPreview = true" />
+            class="script-media-img-wrapper">
+            <img
+              :src="img"
+              class="script-media-img"
+              loading="lazy"
+              @click.stop="showPreview = true" />
+            <q-menu touch-position context-menu>
+              <q-list dense style="min-width: 150px">
+                <q-item clickable v-close-popup @click.stop="copyImage(img)">
+                  <q-item-section avatar><q-icon name="content_copy" size="sm" /></q-item-section>
+                  <q-item-section>复制图片</q-item-section>
+                </q-item>
+                <q-item clickable v-close-popup @click.stop="revealInFolder(img)">
+                  <q-item-section avatar><q-icon name="folder_open" size="sm" /></q-item-section>
+                  <q-item-section>在文件夹中显示</q-item-section>
+                </q-item>
+              </q-list>
+            </q-menu>
+          </div>
         </div>
         <!-- Videos -->
         <div
@@ -256,7 +313,8 @@ function confirmDelete() {
             controls
             controlslist="nofullscreen"
             preload="metadata"
-            class="script-media-video">
+            class="script-media-video"
+            @contextmenu.prevent>
             <source :src="videoSrc(vid)" :type="videoMimeType(vid)" />
           </video>
           <q-btn
@@ -268,6 +326,23 @@ function confirmDelete() {
             @click.stop="openFullscreen(vid)">
             <q-tooltip>全屏播放</q-tooltip>
           </q-btn>
+          <q-btn
+            icon="folder_open"
+            round flat
+            color="white"
+            size="sm"
+            class="video-reveal-btn"
+            @click.stop="revealInFolder(vid)">
+            <q-tooltip>在文件夹中显示</q-tooltip>
+          </q-btn>
+          <q-menu touch-position context-menu>
+            <q-list dense style="min-width: 150px">
+              <q-item clickable v-close-popup @click.stop="revealInFolder(vid)">
+                <q-item-section avatar><q-icon name="folder_open" size="sm" /></q-item-section>
+                <q-item-section>在文件夹中显示</q-item-section>
+              </q-item>
+            </q-list>
+          </q-menu>
         </div>
       </div>
 
@@ -297,7 +372,8 @@ function confirmDelete() {
                   controls
                   controlslist="nofullscreen"
                   preload="metadata"
-                  class="rounded-borders shadow-1 full-width preview-video">
+                  class="rounded-borders shadow-1 full-width preview-video"
+                  @contextmenu.prevent>
                   <source :src="videoSrc(media)" :type="videoMimeType(media)" />
                 </video>
                 <q-btn
@@ -309,13 +385,43 @@ function confirmDelete() {
                   @click="openFullscreen(media)">
                   <q-tooltip>全屏播放</q-tooltip>
                 </q-btn>
+                <q-btn
+                  icon="folder_open"
+                  round flat
+                  color="white"
+                  size="sm"
+                  class="video-reveal-btn"
+                  @click.stop="revealInFolder(media)">
+                  <q-tooltip>在文件夹中显示</q-tooltip>
+                </q-btn>
+                <q-menu touch-position context-menu>
+                  <q-list dense style="min-width: 150px">
+                    <q-item clickable v-close-popup @click.stop="revealInFolder(media)">
+                      <q-item-section avatar><q-icon name="folder_open" size="sm" /></q-item-section>
+                      <q-item-section>在文件夹中显示</q-item-section>
+                    </q-item>
+                  </q-list>
+                </q-menu>
               </div>
               <!-- Image -->
-              <img
-                v-else
-                :src="media"
-                class="rounded-borders shadow-1 full-width preview-img"
-                loading="lazy" />
+              <div v-else class="relative-position">
+                <img
+                  :src="media"
+                  class="rounded-borders shadow-1 full-width preview-img"
+                  loading="lazy" />
+                <q-menu touch-position context-menu>
+                  <q-list dense style="min-width: 150px">
+                    <q-item clickable v-close-popup @click.stop="copyImage(media)">
+                      <q-item-section avatar><q-icon name="content_copy" size="sm" /></q-item-section>
+                      <q-item-section>复制图片</q-item-section>
+                    </q-item>
+                    <q-item clickable v-close-popup @click.stop="revealInFolder(media)">
+                      <q-item-section avatar><q-icon name="folder_open" size="sm" /></q-item-section>
+                      <q-item-section>在文件夹中显示</q-item-section>
+                    </q-item>
+                  </q-list>
+                </q-menu>
+              </div>
             </template>
           </div>
         </q-card-section>
@@ -486,6 +592,19 @@ video::-webkit-media-controls-fullscreen-button {
   bottom: 36px;
   background: rgba(0, 0, 0, 0.5);
   z-index: 1;
+}
+
+.video-reveal-btn {
+  position: absolute;
+  right: 40px;
+  bottom: 36px;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1;
+}
+
+.script-media-img-wrapper {
+  display: block;
+  position: relative;
 }
 
 .fullscreen-video-player {

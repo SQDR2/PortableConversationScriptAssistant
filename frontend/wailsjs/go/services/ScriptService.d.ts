@@ -11,6 +11,8 @@ export function ImportScripts(arg1:Array<string>):Promise<number>;
 
 export function ListScripts(arg1:number,arg2:number):Promise<Array<models.Script>>;
 
+export function RevealInFileManager(arg1:string):Promise<void>;
+
 export function SaveScriptImage(arg1:string,arg2:string):Promise<string>;
 
 export function SearchScripts(arg1:string):Promise<Array<models.Script>>;
