@@ -17,7 +17,7 @@ const headerTitle = computed(() => selectedTarget.value?.title?.trim() || appNam
 const emit = defineEmits(['open-target-dialog'])
 const configDialogOpen = ref(false)
 const isConfigForced = ref(false)
-const appVersion = ref('v2.0.4')
+const appVersion = ref('v2.0.6')
 const settingsDialogOpen = ref(false)
 
 onMounted(async () => {

@@ -2,10 +2,13 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
-	"os"
 	"strings"
 )
+
+//go:embed VERSION
+var embeddedVersion string
 
 // App struct
 type App struct {
@@ -28,11 +31,7 @@ func (a *App) Greet(name string) string {
 	return fmt.Sprintf("Hello %s, It's show time!", name)
 }
 
-// GetVersion returns the application version from the VERSION file
+// GetVersion returns the application version embedded at build time
 func (a *App) GetVersion() string {
-	version, err := os.ReadFile("VERSION")
-	if err != nil {
-		return "v2.0.4" // 默认回退版本
-	}
-	return strings.TrimSpace(string(version))
+	return strings.TrimSpace(embeddedVersion)
 }
