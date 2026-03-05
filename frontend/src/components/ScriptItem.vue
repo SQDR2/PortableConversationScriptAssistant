@@ -592,7 +592,7 @@ function confirmDelete() {
 .script-media-images {
   &.single .script-media-img {
     width: 100%;
-    max-height: 200px;
+    max-height: 120px;
     object-fit: cover;
     border-radius: 8px;
     display: block;
@@ -606,7 +606,7 @@ function confirmDelete() {
 
     .script-media-img {
       width: 100%;
-      height: 120px;
+      height: 80px;
       object-fit: cover;
       border-radius: 8px;
       display: block;
@@ -618,6 +618,7 @@ function confirmDelete() {
 .script-media-video {
   display: block;
   width: 100%;
+  max-height: 160px;
   border-radius: 8px;
   background: #000;
 }
