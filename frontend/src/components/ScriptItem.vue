@@ -329,7 +329,7 @@ function confirmDelete() {
       <!-- Content Text -->
       <q-item-label
         class="script-content q-mt-xs script-content-clickable"
-        lines="4"
+        lines="6"
         @click="handleContentClick"
         @dblclick="handleContentDblClick">
         {{ scriptPreview }}
@@ -592,7 +592,7 @@ function confirmDelete() {
 .script-media-images {
   &.single .script-media-img {
     width: 100%;
-    max-height: 120px;
+    max-height: 72px;
     object-fit: cover;
     border-radius: 8px;
     display: block;
@@ -606,7 +606,7 @@ function confirmDelete() {
 
     .script-media-img {
       width: 100%;
-      height: 80px;
+      height: 52px;
       object-fit: cover;
       border-radius: 8px;
       display: block;
@@ -618,7 +618,7 @@ function confirmDelete() {
 .script-media-video {
   display: block;
   width: 100%;
-  max-height: 160px;
+  max-height: 80px;
   border-radius: 8px;
   background: #000;
 }
