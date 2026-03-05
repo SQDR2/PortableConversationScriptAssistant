@@ -132,20 +132,80 @@ onUnmounted(() => {
   }
 })
 
-async function copyContent() {
-  try {
-    await navigator.clipboard.writeText(props.script.content)
-    copied.value = true
-    if (copiedTimer) {
-      clearTimeout(copiedTimer)
+async function imageUrlToBase64(url: string): Promise<string> {
+  const imgEl = new Image()
+  await new Promise<void>((resolve, reject) => {
+    imgEl.onload = () => resolve()
+    imgEl.onerror = () => reject(new Error('图片加载失败'))
+    imgEl.src = url
+  })
+  const canvas = document.createElement('canvas')
+  canvas.width = imgEl.naturalWidth
+  canvas.height = imgEl.naturalHeight
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('canvas 2d context 不可用')
+  ctx.drawImage(imgEl, 0, 0)
+  return new Promise<string>((resolve, reject) => {
+    canvas.toBlob(blob => {
+      if (!blob) { reject(new Error('canvas toBlob 返回 null')); return }
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = () => reject(new Error('FileReader 读取失败'))
+      reader.readAsDataURL(blob)
+    }, 'image/png')
+  })
+}
+
+async function copyRichContent() {
+  const images = scriptImages.value.filter(m => !isVideo(m))
+
+  if (images.length === 0) {
+    // 无图片：使用纯文本路径
+    try {
+      await navigator.clipboard.writeText(props.script.content)
+      copied.value = true
+      if (copiedTimer) clearTimeout(copiedTimer)
+      copiedTimer = setTimeout(() => {
+        copied.value = false
+        copiedTimer = null
+      }, 1500)
+      $q.notify({ type: 'positive', message: '已复制文本内容', timeout: 1000 })
+    } catch (e) {
+      console.error('Copy failed:', e)
+      $q.notify({ type: 'negative', message: '复制失败' })
     }
+    return
+  }
+
+  // 有图片：构造 text/html + text/plain 双格式 ClipboardItem
+  // 关键：ClipboardItem 必须在同步用户手势中构造，将异步操作封装在 Promise<Blob> 里
+  const htmlBlobPromise: Promise<Blob> = (async () => {
+    const base64List = await Promise.all(images.map(imageUrlToBase64))
+    const imgTags = base64List.map(b64 => `<img src="${b64}" />`).join('')
+    const html = `<p>${props.script.content.replace(/\n/g, '<br/>')}</p>${imgTags}`
+    return new Blob([html], { type: 'text/html' })
+  })()
+
+  const textBlobPromise: Promise<Blob> = Promise.resolve(
+    new Blob([props.script.content], { type: 'text/plain' })
+  )
+
+  try {
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        'text/plain': textBlobPromise,
+        'text/html': htmlBlobPromise,
+      })
+    ])
+    copied.value = true
+    if (copiedTimer) clearTimeout(copiedTimer)
     copiedTimer = setTimeout(() => {
       copied.value = false
       copiedTimer = null
     }, 1500)
-    $q.notify({ type: 'positive', message: '已复制文本内容', timeout: 1000 })
+    $q.notify({ type: 'positive', message: '已复制图文内容', timeout: 1000 })
   } catch (e) {
-    console.error('Copy failed:', e)
+    console.error('Copy rich content failed:', e)
     $q.notify({ type: 'negative', message: '复制失败' })
   }
 }
@@ -155,7 +215,7 @@ function handleContentClick() {
     clearTimeout(contentClickTimer)
   }
   contentClickTimer = setTimeout(() => {
-    copyContent()
+    copyRichContent()
     contentClickTimer = null
   }, 220)
 }
@@ -260,7 +320,7 @@ function confirmDelete() {
             size="xs"
             :icon="copied ? 'check' : 'content_copy'"
             :color="copied ? 'positive' : 'grey-6'"
-            @click.stop="copyContent">
+            @click.stop="copyRichContent">
             <q-tooltip>{{ copied ? '已复制' : '复制' }}</q-tooltip>
           </q-btn>
         </div>
@@ -427,7 +487,7 @@ function confirmDelete() {
         </q-card-section>
 
         <q-card-actions align="right">
-          <q-btn flat label="复制全文" color="primary" @click="copyContent" />
+          <q-btn flat label="复制全文" color="primary" @click="copyRichContent" />
           <q-btn flat label="关闭" v-close-popup />
         </q-card-actions>
       </q-card>
